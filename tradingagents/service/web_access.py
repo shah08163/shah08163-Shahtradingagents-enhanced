@@ -4,12 +4,11 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from urllib.parse import urlsplit
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -71,7 +70,7 @@ def issue_invite(data: InviteRequest, request: Request):
     if "@" not in email or any(x in email for x in (" ", "/", "\\", "\n")):
         raise HTTPException(400, "Valid invitee email required.")
     token = secrets.token_urlsafe(36)
-    expires = datetime.now(timezone.utc) + timedelta(days=7)
+    expires = datetime.now(UTC) + timedelta(days=7)
     initialize()
     with db() as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO shah_invites (token_hash, email, expires_at) VALUES (%s,%s,%s)",
@@ -174,7 +173,7 @@ def web_analyze(data: dict, request: Request):
     try:
         payload = AnalyzeRequest.model_validate(data)
     except Exception:
-        raise HTTPException(422, "Invalid analysis request.")
+        raise HTTPException(422, "Invalid analysis request.") from None
     # Prevent file output, historical lookahead, excessive analyst fanout and costs.
     if len(payload.analysts) > 7:
         raise HTTPException(400, "Too many analysts.")
