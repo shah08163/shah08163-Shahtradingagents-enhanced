@@ -2,7 +2,7 @@
 
 This module intentionally wraps the upstream TradingAgentsGraph rather than
 modifying its research graph. That keeps upstream merges small and gives us a
-stable boundary for Northflank and, later, MCP.
+stable boundary for hosted deployment and, later, MCP.
 """
 
 from __future__ import annotations
@@ -13,23 +13,31 @@ import secrets
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from tradingagents.dataflows.date_window import get_current_date
 from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
+from tradingagents.service.auth_store import install_postgres_auth_store
+from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 ALLOWED_ANALYSTS = frozenset(DEFAULT_ANALYSTS)
 API_TOKEN_ENV = "SHAHTRADINGAGENTS_API_TOKEN"
+DATABASE_URL_ENV = "DATABASE_URL"
+
+install_postgres_auth_store()
 
 app = FastAPI(
     title="Shah TradingAgents API",
-    version="0.1.0",
+    version="0.2.0",
     description="Service wrapper around the TradingAgents multi-agent research graph.",
 )
+
+_bearer = HTTPBearer(auto_error=False)
 
 
 class AnalyzeRequest(BaseModel):
@@ -58,6 +66,20 @@ class AnalyzeResponse(BaseModel):
     report_path: str | None = None
 
 
+class ChatGPTAuthStartResponse(BaseModel):
+    authorize_url: str
+    expires_in_seconds: int = 600
+    instructions: str
+
+
+class ChatGPTAuthCompleteRequest(BaseModel):
+    callback_url: str = Field(min_length=1)
+
+
+class ChatGPTAuthCompleteResponse(BaseModel):
+    signed_in: bool
+
+
 def _json_safe(value):
     """Convert LangGraph/model objects to JSON-safe primitives without losing text."""
     return json.loads(json.dumps(value, default=str))
@@ -78,17 +100,16 @@ def _validated_analysts(names: list[str]) -> list[str]:
 
 
 def _require_api_token(
-    authorization: Annotated[str | None, Header()] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
 ) -> None:
-    """Require a Bearer token for cost-incurring endpoints and fail closed."""
+    """Require a Bearer token for privileged and cost-incurring endpoints."""
     expected = os.environ.get(API_TOKEN_ENV)
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Service authentication is not configured; set {API_TOKEN_ENV}.",
         )
-    prefix = "Bearer "
-    supplied = authorization[len(prefix):] if authorization and authorization.startswith(prefix) else ""
+    supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
     if not supplied or not secrets.compare_digest(supplied, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -108,6 +129,7 @@ def health() -> dict:
         "quick_model": config.get("quick_think_llm"),
         "deep_model": config.get("deep_think_llm"),
         "api_auth_configured": bool(os.environ.get(API_TOKEN_ENV)),
+        "persistent_auth_configured": bool(os.environ.get(DATABASE_URL_ENV)),
     }
 
 
@@ -118,13 +140,60 @@ def ready() -> dict:
     provider = config.get("llm_provider")
     chatgpt_ready = bool(chatgpt_auth.signed_in_as()) if provider == "chatgpt" else None
     auth_ready = bool(os.environ.get(API_TOKEN_ENV))
-    ready_now = auth_ready and (chatgpt_ready is not False)
+    persistence_ready = bool(os.environ.get(DATABASE_URL_ENV))
+    ready_now = auth_ready and persistence_ready and (chatgpt_ready is not False)
     return {
         "ready": ready_now,
         "provider": provider,
         "api_auth_configured": auth_ready,
+        "persistent_auth_configured": persistence_ready,
         "chatgpt_signed_in": chatgpt_ready,
     }
+
+
+@app.post(
+    "/auth/chatgpt/start",
+    response_model=ChatGPTAuthStartResponse,
+    dependencies=[Depends(_require_api_token)],
+)
+def auth_chatgpt_start() -> ChatGPTAuthStartResponse:
+    if not os.environ.get(DATABASE_URL_ENV):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Persistent auth storage is not configured; set {DATABASE_URL_ENV}.",
+        )
+    try:
+        return ChatGPTAuthStartResponse(
+            authorize_url=begin_sign_in(),
+            instructions=(
+                "Open authorize_url and complete ChatGPT sign-in. The browser will finish on a "
+                "127.0.0.1 URL that may not load. Copy that entire final URL and submit it to "
+                "POST /auth/chatgpt/complete within 10 minutes."
+            ),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not start ChatGPT sign-in ({type(exc).__name__}).",
+        ) from exc
+
+
+@app.post(
+    "/auth/chatgpt/complete",
+    response_model=ChatGPTAuthCompleteResponse,
+    dependencies=[Depends(_require_api_token)],
+)
+def auth_chatgpt_complete(request: ChatGPTAuthCompleteRequest) -> ChatGPTAuthCompleteResponse:
+    try:
+        complete_sign_in(request.callback_url)
+        return ChatGPTAuthCompleteResponse(signed_in=True)
+    except chatgpt_auth.ChatGPTAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not complete ChatGPT sign-in ({type(exc).__name__}).",
+        ) from exc
 
 
 @app.post("/analyze", response_model=AnalyzeResponse, dependencies=[Depends(_require_api_token)])
