@@ -23,6 +23,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
 from tradingagents.service.auth_store import install_postgres_auth_store
 from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
+from tradingagents.service.web_access import router as web_router
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 ANALYST_ORDER = ["market", "social", "news", "fundamentals", "flow", "oi", "dealer"]
@@ -200,6 +201,10 @@ def auth_chatgpt_complete(request: ChatGPTAuthCompleteRequest) -> ChatGPTAuthCom
 
 @app.post("/analyze", response_model=AnalyzeResponse, dependencies=[Depends(_require_api_token)])
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    return execute_analysis(request)
+
+
+def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
     try:
         ticker = request.ticker.strip().upper()
         if not ticker:
@@ -259,3 +264,6 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             status_code=500,
             detail=f"TradingAgents analysis failed ({type(exc).__name__}).",
         ) from exc
+
+
+app.include_router(web_router)
