@@ -1,7 +1,11 @@
 """HTTP access controls and dashboard smoke tests (no external LLM calls)."""
-from fastapi.testclient import TestClient
+from importlib import import_module
 
-from tradingagents.service.api import app
+import pytest
+
+pytest.importorskip('fastapi', reason='Optional service dependencies are not installed')
+TestClient = import_module('fastapi.testclient').TestClient
+app = import_module('tradingagents.service.api').app
 
 
 def test_dashboard_and_api_docs_are_served():
