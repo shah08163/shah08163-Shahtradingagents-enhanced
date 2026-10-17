@@ -8,10 +8,12 @@ stable boundary for Northflank and, later, MCP.
 from __future__ import annotations
 
 import json
+import os
+import secrets
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from tradingagents.dataflows.date_window import get_current_date
@@ -21,6 +23,7 @@ from tradingagents.llm_clients import chatgpt_auth
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 ALLOWED_ANALYSTS = frozenset(DEFAULT_ANALYSTS)
+API_TOKEN_ENV = "SHAHTRADINGAGENTS_API_TOKEN"
 
 app = FastAPI(
     title="Shah TradingAgents API",
@@ -74,23 +77,57 @@ def _validated_analysts(names: list[str]) -> list[str]:
     return [name for name in DEFAULT_ANALYSTS if name in selected]
 
 
+def _require_api_token(
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """Require a Bearer token for cost-incurring endpoints and fail closed."""
+    expected = os.environ.get(API_TOKEN_ENV)
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service authentication is not configured; set {API_TOKEN_ENV}.",
+        )
+    prefix = "Bearer "
+    supplied = authorization[len(prefix):] if authorization and authorization.startswith(prefix) else ""
+    if not supplied or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bearer token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @app.get("/health")
 def health() -> dict:
+    """Cheap liveness probe that never exposes account identity or credentials."""
     config = build_default_config()
-    provider = config.get("llm_provider")
-    signed_in = chatgpt_auth.signed_in_as() if provider == "chatgpt" else None
     return {
         "status": "ok",
         "service": "shah-tradingagents",
-        "provider": provider,
+        "provider": config.get("llm_provider"),
         "quick_model": config.get("quick_think_llm"),
         "deep_model": config.get("deep_think_llm"),
-        "chatgpt_signed_in": bool(signed_in),
-        "chatgpt_account": signed_in,
+        "api_auth_configured": bool(os.environ.get(API_TOKEN_ENV)),
     }
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+@app.get("/ready")
+def ready() -> dict:
+    """Readiness details without leaking which ChatGPT account is signed in."""
+    config = build_default_config()
+    provider = config.get("llm_provider")
+    chatgpt_ready = bool(chatgpt_auth.signed_in_as()) if provider == "chatgpt" else None
+    auth_ready = bool(os.environ.get(API_TOKEN_ENV))
+    ready_now = auth_ready and (chatgpt_ready is not False)
+    return {
+        "ready": ready_now,
+        "provider": provider,
+        "api_auth_configured": auth_ready,
+        "chatgpt_signed_in": chatgpt_ready,
+    }
+
+
+@app.post("/analyze", response_model=AnalyzeResponse, dependencies=[Depends(_require_api_token)])
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     try:
         ticker = request.ticker.strip().upper()
@@ -136,8 +173,9 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
-        # Do not echo provider exceptions: SDK/network errors can include sensitive detail.
         raise HTTPException(
             status_code=500,
             detail=f"TradingAgents analysis failed ({type(exc).__name__}).",
