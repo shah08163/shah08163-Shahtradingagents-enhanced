@@ -9,8 +9,27 @@ data has the same evidentiary value as strong, fresh data.
 
 from __future__ import annotations
 
-from tradingagents.agents.schemas import EvidenceAssessment
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
+
+
+AnalystKey = Literal["market", "social", "news", "fundamentals", "flow", "oi", "dealer"]
+
+
+class EvidenceItem(BaseModel):
+    analyst: AnalystKey
+    directional_score: float = Field(ge=-1.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    data_quality: float = Field(ge=0.0, le=1.0)
+    freshness: float = Field(ge=0.0, le=1.0)
+    rationale: str
+
+
+class EvidenceAssessment(BaseModel):
+    items: list[EvidenceItem]
 
 
 REPORTS = (
