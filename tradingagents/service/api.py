@@ -25,16 +25,18 @@ from tradingagents.service.auth_store import install_postgres_auth_store
 from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
-ALLOWED_ANALYSTS = frozenset(DEFAULT_ANALYSTS)
+ANALYST_ORDER = ["market", "social", "news", "fundamentals", "flow", "oi"]
+ALLOWED_ANALYSTS = frozenset(ANALYST_ORDER)
 API_TOKEN_ENV = "SHAHTRADINGAGENTS_API_TOKEN"
 DATABASE_URL_ENV = "DATABASE_URL"
+BULLFLOW_API_KEY_ENV = "BULLFLOW_API_KEY"
 
 install_postgres_auth_store()
 
 app = FastAPI(
     title="Shah TradingAgents API",
-    version="0.2.0",
-    description="Service wrapper around the TradingAgents multi-agent research graph.",
+    version="0.3.0",
+    description="Hosted TradingAgents research graph with optional Bullflow flow/OI analysts.",
 )
 
 _bearer = HTTPBearer(auto_error=False)
@@ -96,13 +98,12 @@ def _validated_analysts(names: list[str]) -> list[str]:
             f"Allowed: {', '.join(sorted(ALLOWED_ANALYSTS))}."
         )
     selected = set(cleaned)
-    return [name for name in DEFAULT_ANALYSTS if name in selected]
+    return [name for name in ANALYST_ORDER if name in selected]
 
 
 def _require_api_token(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
 ) -> None:
-    """Require a Bearer token for privileged and cost-incurring endpoints."""
     expected = os.environ.get(API_TOKEN_ENV)
     if not expected:
         raise HTTPException(
@@ -120,7 +121,6 @@ def _require_api_token(
 
 @app.get("/health")
 def health() -> dict:
-    """Cheap liveness probe that never exposes account identity or credentials."""
     config = build_default_config()
     return {
         "status": "ok",
@@ -130,12 +130,12 @@ def health() -> dict:
         "deep_model": config.get("deep_think_llm"),
         "api_auth_configured": bool(os.environ.get(API_TOKEN_ENV)),
         "persistent_auth_configured": bool(os.environ.get(DATABASE_URL_ENV)),
+        "bullflow_configured": bool(os.environ.get(BULLFLOW_API_KEY_ENV)),
     }
 
 
 @app.get("/ready")
 def ready() -> dict:
-    """Readiness details without leaking which ChatGPT account is signed in."""
     config = build_default_config()
     provider = config.get("llm_provider")
     chatgpt_ready = bool(chatgpt_auth.signed_in_as()) if provider == "chatgpt" else None
@@ -148,6 +148,8 @@ def ready() -> dict:
         "api_auth_configured": auth_ready,
         "persistent_auth_configured": persistence_ready,
         "chatgpt_signed_in": chatgpt_ready,
+        "bullflow_configured": bool(os.environ.get(BULLFLOW_API_KEY_ENV)),
+        "available_analysts": ANALYST_ORDER,
     }
 
 
@@ -204,6 +206,13 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             raise ValueError("Ticker cannot be blank.")
 
         analysts = _validated_analysts(request.analysts)
+        if request.asset_type != "stock" and ({"flow", "oi"} & set(analysts)):
+            raise ValueError("Bullflow flow/OI analysts currently support stock/ETF/index tickers, not crypto.")
+        if ({"flow", "oi"} & set(analysts)) and not os.environ.get(BULLFLOW_API_KEY_ENV):
+            raise ValueError(
+                f"Bullflow analysts requested but {BULLFLOW_API_KEY_ENV} is not configured on the service."
+            )
+
         trade_date = request.trade_date or get_current_date()
         config = build_default_config()
         if request.checkpoint is not None:
