@@ -28,8 +28,10 @@ def _get(path: str, **params: Any) -> dict[str, Any]:
     if not key:
         raise RuntimeError(f"{API_KEY_ENV} is not configured")
     clean = {k: v for k, v in params.items() if v is not None}
-    clean["key"] = key
-    response = requests.get(f"{BASE_URL}{path}", params=clean, timeout=TIMEOUT_SECONDS)
+    response = requests.get(
+        f"{BASE_URL}{path}", params=clean,
+        headers={"X-API-Key": key}, timeout=TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
     payload = response.json()
     if isinstance(payload, dict) and "data" in payload:
@@ -43,7 +45,9 @@ def _safe(label: str, fn) -> str:
     try:
         return json.dumps(fn(), indent=2, sort_keys=True, default=str)
     except Exception as exc:
-        return f"<unavailable source=\"Bullflow {label}\" reason=\"{type(exc).__name__}: {exc}\">"
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        reason = f"{type(exc).__name__} HTTP {status}" if status else type(exc).__name__
+        return f'<unavailable source="Bullflow {label}" reason="{reason}">'
 
 
 def fetch_flow_bundle(ticker: str, trade_date: str) -> str:
