@@ -28,3 +28,10 @@ class AnalystExecutionPlanTests(unittest.TestCase):
         self.assertEqual(spec.key, "social")
         self.assertEqual(spec.agent_node, "Sentiment Analyst")
         self.assertEqual(spec.report_key, "sentiment_report")
+
+    def test_dealer_key_maps_to_gex_vex_report(self):
+        plan = build_analyst_execution_plan(["dealer"])
+        spec = plan.specs[0]
+        self.assertEqual(spec.key, "dealer")
+        self.assertEqual(spec.agent_node, "Dealer Positioning Analyst")
+        self.assertEqual(spec.report_key, "dealer_positioning_report")
