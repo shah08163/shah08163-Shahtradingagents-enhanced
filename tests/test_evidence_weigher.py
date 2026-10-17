@@ -3,8 +3,8 @@ import unittest
 from tradingagents.agents.analysts.evidence_weigher import (
     EvidenceAssessment,
     EvidenceItem,
-    _render,
     _independent_weights,
+    _render,
 )
 
 
