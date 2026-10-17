@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
-
 AnalystKey = Literal["market", "social", "news", "fundamentals", "flow", "oi", "dealer"]
 
 
