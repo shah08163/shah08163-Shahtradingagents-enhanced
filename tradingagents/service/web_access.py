@@ -5,11 +5,12 @@ import hashlib
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -50,7 +51,7 @@ def browser_origin(request: Request):
         raise HTTPException(415, "JSON required.")
 
 
-def owner(credentials: HTTPAuthorizationCredentials | None = Depends(_admin_bearer)):
+def owner(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_admin_bearer)] = None):
     expected = os.environ.get("SHAHTRADINGAGENTS_API_TOKEN", "")
     supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
     if not expected or not secrets.compare_digest(supplied, expected):
@@ -102,7 +103,7 @@ def revoke_access(data: InviteRequest):
 def redeem(data: RedeemRequest, request: Request, response: Response):
     browser_origin(request)
     initialize()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = secrets.token_urlsafe(40)
     with db() as conn, conn.cursor() as cur:
         cur.execute("""UPDATE shah_invites SET redeemed_at=%s
