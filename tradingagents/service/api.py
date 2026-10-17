@@ -8,13 +8,13 @@ stable boundary for Northflank and, later, MCP.
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from tradingagents.dataflows.date_window import get_current_date
 from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
@@ -33,7 +33,7 @@ class AnalyzeRequest(BaseModel):
     ticker: str = Field(min_length=1, max_length=32)
     trade_date: str | None = Field(
         default=None,
-        description="Analysis date in YYYY-MM-DD. Defaults to today's date.",
+        description="Analysis date in YYYY-MM-DD. Defaults to today's market date.",
     )
     asset_type: Literal["stock", "crypto"] = "stock"
     analysts: list[str] = Field(default_factory=lambda: DEFAULT_ANALYSTS.copy())
@@ -70,8 +70,8 @@ def _validated_analysts(names: list[str]) -> list[str]:
             f"Unsupported analysts: {', '.join(unknown)}. "
             f"Allowed: {', '.join(sorted(ALLOWED_ANALYSTS))}."
         )
-    # Keep a deterministic order while removing duplicates.
-    return [name for name in DEFAULT_ANALYSTS if name in set(cleaned)]
+    selected = set(cleaned)
+    return [name for name in DEFAULT_ANALYSTS if name in selected]
 
 
 @app.get("/health")
@@ -93,8 +93,12 @@ def health() -> dict:
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     try:
+        ticker = request.ticker.strip().upper()
+        if not ticker:
+            raise ValueError("Ticker cannot be blank.")
+
         analysts = _validated_analysts(request.analysts)
-        trade_date = request.trade_date or date.today().isoformat()
+        trade_date = request.trade_date or get_current_date()
         config = build_default_config()
         if request.checkpoint is not None:
             config["checkpoint_enabled"] = request.checkpoint
@@ -105,7 +109,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             debug=False,
         )
         final_state, signal = graph.propagate(
-            request.ticker.strip().upper(),
+            ticker,
             trade_date,
             asset_type=request.asset_type,
         )
@@ -114,12 +118,12 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         if request.save_reports:
             report_path = graph.save_reports(
                 final_state,
-                request.ticker.strip().upper(),
+                ticker,
                 html=request.html_report,
             )
 
         return AnalyzeResponse(
-            ticker=request.ticker.strip().upper(),
+            ticker=ticker,
             trade_date=trade_date,
             asset_type=request.asset_type,
             signal=str(signal),
@@ -133,8 +137,8 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        # Keep provider credentials and internal stack details out of HTTP responses.
+        # Do not echo provider exceptions: SDK/network errors can include sensitive detail.
         raise HTTPException(
             status_code=500,
-            detail=f"TradingAgents analysis failed: {type(exc).__name__}: {exc}",
+            detail=f"TradingAgents analysis failed ({type(exc).__name__}).",
         ) from exc
