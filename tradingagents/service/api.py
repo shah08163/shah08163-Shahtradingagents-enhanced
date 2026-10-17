@@ -23,6 +23,12 @@ from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
 from tradingagents.service.auth_store import install_postgres_auth_store
+from tradingagents.service.mcp_oauth import (
+    bearer_challenge,
+    current_mcp_identity,
+    router as mcp_oauth_router,
+    verify_mcp_access_token,
+)
 from tradingagents.service.mcp_tools import mcp as tradingagents_mcp
 from tradingagents.service.web_access import router as web_router
 from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
@@ -276,21 +282,37 @@ def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
 
 
 app.include_router(web_router)
+app.include_router(mcp_oauth_router)
 
 # ChatGPT tool calls are authorized independently of the owner's Swagger API
 # credential. Never expose or reuse the owner token in an MCP manifest.
 @app.middleware("http")
 async def require_mcp_token(request: Request, call_next):
-    if request.url.path.startswith("/mcp"):
+    path = request.url.path
+    if path == "/mcp" or path.startswith("/mcp/"):
         expected = os.environ.get("SHAHTRADINGAGENTS_MCP_TOKEN", "")
-        supplied = request.headers.get("authorization", "")
-        if not expected:
+        authorization = request.headers.get("authorization", "")
+        parts = authorization.split(None, 1)
+        supplied = parts[1] if len(parts) == 2 and parts[0].lower() == "bearer" else ""
+        identity = None
+        if supplied and expected and secrets.compare_digest(supplied, expected):
+            # Preserve the previous API-key mechanism for existing clients.
+            identity = "service-owner"
+        elif supplied:
+            identity = verify_mcp_access_token(supplied)
+        if identity is None:
             from fastapi.responses import JSONResponse
-            return JSONResponse({"detail": "MCP access is not configured"}, status_code=503)
-        if not secrets.compare_digest(supplied, "Bearer " + expected):
-            from fastapi.responses import JSONResponse
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401,
-                                headers={"WWW-Authenticate": "Bearer"})
+
+            return JSONResponse(
+                {"detail": "Unauthorized"},
+                status_code=401,
+                headers={"WWW-Authenticate": bearer_challenge()},
+            )
+        context_token = current_mcp_identity.set(identity)
+        try:
+            return await call_next(request)
+        finally:
+            current_mcp_identity.reset(context_token)
     return await call_next(request)
 
 
