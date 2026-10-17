@@ -12,6 +12,7 @@ from tradingagents.agents import (
     create_bull_researcher,
     create_conservative_debator,
     create_dealer_positioning_analyst,
+    create_evidence_weigher,
     create_flow_analyst,
     create_fundamentals_analyst,
     create_market_analyst,
@@ -116,6 +117,7 @@ class GraphSetup:
             "dealer": lambda: create_dealer_positioning_analyst(self.quick_thinking_llm),
         }
 
+        evidence_weigher_node = create_evidence_weigher(self.quick_thinking_llm)
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
         bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
         research_manager_node = create_research_manager(self.deep_thinking_llm)
@@ -132,6 +134,7 @@ class GraphSetup:
             workflow.add_node(spec.agent_node,
                               _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds))
 
+        workflow.add_node("Evidence Weigher", evidence_weigher_node)
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
         workflow.add_node("Research Manager", research_manager_node)
@@ -141,13 +144,17 @@ class GraphSetup:
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
-        first_steps = [spec.agent_node for spec in plan.specs]
+        analyst_steps = [spec.agent_node for spec in plan.specs]
+        for node in analyst_steps:
+            workflow.add_edge(START, node)
+        workflow.add_edge(analyst_steps, "Evidence Weigher")
+
         if memory_node is not None:
             workflow.add_node("Memory Log", memory_node)
-            first_steps.append("Memory Log")
-        for node in first_steps:
-            workflow.add_edge(START, node)
-        workflow.add_edge(first_steps, "Bull Researcher")
+            workflow.add_edge(START, "Memory Log")
+            workflow.add_edge(["Evidence Weigher", "Memory Log"], "Bull Researcher")
+        else:
+            workflow.add_edge("Evidence Weigher", "Bull Researcher")
 
         for debate_node in ("Bull Researcher", "Bear Researcher"):
             workflow.add_conditional_edges(
