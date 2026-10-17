@@ -11,6 +11,7 @@ from tradingagents.agents import (
     create_bear_researcher,
     create_bull_researcher,
     create_conservative_debator,
+    create_dealer_positioning_analyst,
     create_flow_analyst,
     create_fundamentals_analyst,
     create_market_analyst,
@@ -100,7 +101,8 @@ class GraphSetup:
         """Set up and compile the agent workflow graph.
 
         Supported analyst keys include market, social, news, fundamentals,
-        flow (Bullflow institutional options flow), and oi (Bullflow OI/fresh positioning).
+        flow (Bullflow institutional options flow), oi (Bullflow OI/fresh positioning),
+        and dealer (Bullflow GEX/VEX dealer-positioning estimates).
         """
         plan = build_analyst_execution_plan(selected_analysts)
 
@@ -111,6 +113,7 @@ class GraphSetup:
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
             "flow": lambda: create_flow_analyst(self.quick_thinking_llm),
             "oi": lambda: create_oi_analyst(self.quick_thinking_llm),
+            "dealer": lambda: create_dealer_positioning_analyst(self.quick_thinking_llm),
         }
 
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
