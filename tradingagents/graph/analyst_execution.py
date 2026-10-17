@@ -25,8 +25,6 @@ ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
         tools=market_analyst.TOOLS,
     ),
     "social": AnalystNodeSpec(
-        # Saved configs select this analyst as "social". It fetches its
-        # sources before calling the model, so it has no tools.
         key="social",
         agent_node="Sentiment Analyst",
         report_key="sentiment_report",
@@ -42,6 +40,16 @@ ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
         agent_node="Fundamentals Analyst",
         report_key="fundamentals_report",
         tools=fundamentals_analyst.TOOLS,
+    ),
+    "flow": AnalystNodeSpec(
+        key="flow",
+        agent_node="Bullflow Flow Analyst",
+        report_key="flow_report",
+    ),
+    "oi": AnalystNodeSpec(
+        key="oi",
+        agent_node="Open Interest Analyst",
+        report_key="oi_report",
     ),
 }
 
@@ -60,5 +68,3 @@ def build_analyst_execution_plan(
         raise ValueError("at least one analyst must be selected")
 
     return AnalystExecutionPlan(specs=specs)
-
-
