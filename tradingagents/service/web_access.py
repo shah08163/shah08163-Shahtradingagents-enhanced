@@ -8,10 +8,12 @@ from datetime import UTC, datetime, timedelta
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+_admin_bearer = HTTPBearer(auto_error=False)
 COOKIE = "shah_session"
 SESSION_HOURS = 12
 DAILY_LIMIT = 3
@@ -48,10 +50,10 @@ def browser_origin(request: Request):
         raise HTTPException(415, "JSON required.")
 
 
-def owner(request: Request):
+def owner(credentials: HTTPAuthorizationCredentials | None = Depends(_admin_bearer)):
     expected = os.environ.get("SHAHTRADINGAGENTS_API_TOKEN", "")
-    given = request.headers.get("authorization", "")
-    if not expected or not secrets.compare_digest(given, "Bearer " + expected):
+    supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
+    if not expected or not secrets.compare_digest(supplied, expected):
         raise HTTPException(401, "Unauthorized")
 
 
