@@ -5,8 +5,6 @@ its ASGI mount. Never embed access tokens in plugin manifests.
 """
 from mcp.server.fastmcp import FastMCP
 
-from tradingagents.service.api import AnalyzeRequest, execute_analysis
-
 mcp = FastMCP(
     "Shah TradingAgents",
     instructions="Run read-only stock research with Shah TradingAgents. Research does not execute trades.",
@@ -25,6 +23,8 @@ def run_trading_research(ticker: str, analysts: list[str] | None = None) -> dict
     Runs can take multiple minutes and may incur LLM usage costs.
     This tool never submits orders.
     """
+    from tradingagents.service.api import AnalyzeRequest, execute_analysis
+
     selected = analysts if analysts is not None else [
         "market", "social", "news", "fundamentals", "flow", "oi", "dealer"
     ]
