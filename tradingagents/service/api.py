@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import os
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -34,7 +35,15 @@ BULLFLOW_API_KEY_ENV = "BULLFLOW_API_KEY"
 
 install_postgres_auth_store()
 
+@asynccontextmanager
+async def service_lifespan(app):
+    from tradingagents.service.mcp_tools import mcp
+    async with mcp.session_manager.run():
+        yield
+
+
 app = FastAPI(
+    lifespan=service_lifespan,
     title="Shah TradingAgents API",
     version="0.4.0",
     description="Hosted TradingAgents research graph with optional Bullflow flow/OI/GEX-VEX analysts.",
@@ -267,3 +276,23 @@ def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
 
 
 app.include_router(web_router)
+
+# ChatGPT tool calls are authorized independently of the owner's Swagger API
+# credential. Never expose or reuse the owner token in an MCP manifest.
+@app.middleware("http")
+async def require_mcp_token(request: Request, call_next):
+    if request.url.path.startswith("/mcp"):
+        expected = os.environ.get("SHAHTRADINGAGENTS_MCP_TOKEN", "")
+        supplied = request.headers.get("authorization", "")
+        if not expected:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "MCP access is not configured"}, status_code=503)
+        if not secrets.compare_digest(supplied, "Bearer " + expected):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401,
+                                headers={"WWW-Authenticate": "Bearer"})
+    return await call_next(request)
+
+
+from tradingagents.service.mcp_tools import mcp as tradingagents_mcp
+app.mount("/mcp", tradingagents_mcp.streamable_http_app())
