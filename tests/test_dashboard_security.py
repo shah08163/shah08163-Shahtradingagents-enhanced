@@ -19,7 +19,7 @@ def test_invite_only_access_and_owner_route_authentication(service_client):
     assert service_client.post(
         "/web/analyze",
         json={"ticker": "AMZN"},
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "https://localhost:8000"},
     ).status_code == 401
     assert service_client.post(
         "/admin/invites", json={"email": "invitee@example.com"}
