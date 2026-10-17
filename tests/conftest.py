@@ -90,6 +90,18 @@ def _own_cli_prefs(tmp_path, monkeypatch):
     monkeypatch.setattr("cli.prefs._PREFS_PATH", tmp_path / "cli_prefs.json")
 
 
+@pytest.fixture(scope="session")
+def service_client():
+    """Keep the MCP session manager inside one application lifespan for the suite."""
+    pytest.importorskip("fastapi", reason="Optional service dependencies are not installed")
+    from fastapi.testclient import TestClient
+
+    from tradingagents.service.api import app
+
+    with TestClient(app) as client:
+        yield client
+
+
 _API_KEY_ENV_VARS = (
     "OPENAI_API_KEY",
     "GOOGLE_API_KEY",
