@@ -38,6 +38,7 @@ dev = [
 ]
 service = [
     "fastapi>=0.115",
+    "mcp>=1.12,<2",
     "psycopg[binary]>=3.2",
     "uvicorn[standard]>=0.34",
 ]
