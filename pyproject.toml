@@ -38,6 +38,7 @@ dev = [
 ]
 service = [
     "fastapi>=0.115",
+    "psycopg[binary]>=3.2",
     "uvicorn[standard]>=0.34",
 ]
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
