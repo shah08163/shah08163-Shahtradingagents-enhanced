@@ -23,8 +23,9 @@ from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
 from tradingagents.service.auth_store import install_postgres_auth_store
-from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
+from tradingagents.service.mcp_tools import mcp as tradingagents_mcp
 from tradingagents.service.web_access import router as web_router
+from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 ANALYST_ORDER = ["market", "social", "news", "fundamentals", "flow", "oi", "dealer"]
@@ -37,8 +38,7 @@ install_postgres_auth_store()
 
 @asynccontextmanager
 async def service_lifespan(app):
-    from tradingagents.service.mcp_tools import mcp
-    async with mcp.session_manager.run():
+    async with tradingagents_mcp.session_manager.run():
         yield
 
 
@@ -294,5 +294,4 @@ async def require_mcp_token(request: Request, call_next):
     return await call_next(request)
 
 
-from tradingagents.service.mcp_tools import mcp as tradingagents_mcp
 app.mount("/mcp", tradingagents_mcp.streamable_http_app())
