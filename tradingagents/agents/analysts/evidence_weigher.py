@@ -55,13 +55,34 @@ def _bias_label(score: float) -> str:
     return "Mixed / Neutral"
 
 
+def _independent_weights(assessment: EvidenceAssessment) -> dict[str, float]:
+    """Discount shared Bullflow signals without inferring statistical correlation.
+
+    Until OI is sourced independently from a full chain, Flow and OI overlap.
+    Combined effective weight cannot exceed the strongest of the two inputs.
+    Both contributions remain visible, proportionally scaled, for audit.
+    """
+    weights = {
+        item.analyst: item.confidence * item.data_quality * item.freshness
+        for item in assessment.items
+    }
+    flow = weights.get("flow", 0.0)
+    oi = weights.get("oi", 0.0)
+    if flow > 0 and oi > 0:
+        factor = max(flow, oi) / (flow + oi)
+        weights["flow"] *= factor
+        weights["oi"] *= factor
+    return weights
+
+
 def _render(assessment: EvidenceAssessment) -> str:
     rows = []
+    adjusted_weights = _independent_weights(assessment)
     weighted_sum = 0.0
     total_weight = 0.0
 
     for item in assessment.items:
-        effective = item.confidence * item.data_quality * item.freshness
+        effective = adjusted_weights[item.analyst]
         contribution = item.directional_score * effective
         weighted_sum += contribution
         total_weight += effective
@@ -86,7 +107,7 @@ def _render(assessment: EvidenceAssessment) -> str:
             "## Confidence-weighted evidence matrix",
             "",
             "Scores are normalized to -1 (strong bearish) through +1 (strong bullish). "
-            "Effective weight is confidence × data quality × freshness. No hidden analyst prior is applied.",
+            "Base weight is confidence × data quality × freshness. Shared Bullflow flow/OI contributions are proportionally discounted so their combined weight does not exceed the stronger input. No hidden analyst prior is applied.",
             "",
             "| Analyst | Direction | Confidence | Data quality | Freshness | Effective weight | Weighted contribution | Why |",
             "|---|---:|---:|---:|---:|---:|---:|---|",
@@ -95,6 +116,7 @@ def _render(assessment: EvidenceAssessment) -> str:
             f"**Aggregate evidence score:** {aggregate:+.3f}",
             f"**Aggregate evidence bias:** {_bias_label(aggregate)}",
             f"**Coverage:** {coverage} analyst report(s)",
+            "**Overlap control:** Flow and recorded-flow OI share a Bullflow source; the adjusted combined weight is capped at the stronger individual weight. This is a conservative heuristic, not a measured correlation.",
             "",
             "This aggregate is an evidence-audit aid, not an automatic trade signal. "
             "The debate and risk agents may override it only by explaining which evidence deserves different treatment.",
