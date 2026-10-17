@@ -21,6 +21,9 @@ def create_bear_researcher(llm):
         fundamentals_report = report_or_absent(state.get("fundamentals_report", ""), "fundamentals")
         flow_report = report_or_absent(state.get("flow_report", ""), "Bullflow flow")
         oi_report = report_or_absent(state.get("oi_report", ""), "open interest")
+        dealer_report = report_or_absent(
+            state.get("dealer_positioning_report", ""), "dealer positioning"
+        )
         instrument_context = get_instrument_context_from_state(state)
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
@@ -35,7 +38,7 @@ def create_bear_researcher(llm):
 Key points to focus on:
 - Risks and Challenges: Highlight financial, competitive, macro, and execution risks.
 - Negative Indicators: Use financial data, technicals, news, and sentiment where supported.
-- Options Positioning: Use Bullflow directional flow and OI/fresh-positioning evidence when supplied. Do not treat MULTI trades as directional without leg evidence, and do not claim Bullflow represents complete market-wide volume or OI.
+- Options Positioning: Use Bullflow directional flow, OI/fresh-positioning evidence, and GEX/VEX dealer-positioning estimates when supplied. Do not treat MULTI trades as directional without leg evidence, do not claim Bullflow represents complete market-wide volume or OI, and do not describe model-derived GEX/VEX as verified dealer inventory.
 - Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning.
 
 Resources available:
@@ -46,9 +49,10 @@ Latest world affairs news: {news_report}
 {fundamentals_label}: {fundamentals_report}
 Bullflow institutional options-flow report: {flow_report}
 Bullflow OI / fresh-positioning report: {oi_report}
+Bullflow GEX/VEX dealer-positioning report: {dealer_report}
 Conversation history of the debate: {history}
 Last bull argument: {current_response}
-Use this information to deliver a compelling bear argument. Explicitly discuss whether options positioning confirms or contradicts the fundamental/technical bear thesis when those reports are available.
+Use this information to deliver a compelling bear argument. Explicitly discuss whether options positioning and dealer-exposure estimates confirm or contradict the fundamental/technical bear thesis when those reports are available.
 """ + get_language_instruction()
 
         response = llm.invoke(prompt)
