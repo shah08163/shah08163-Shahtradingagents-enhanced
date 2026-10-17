@@ -56,6 +56,7 @@ class AgentState(MessagesState):
     flow_report: Annotated[str, "Bullflow institutional options-flow report"]
     oi_report: Annotated[str, "Bullflow open-interest and fresh-positioning report"]
     dealer_positioning_report: Annotated[str, "Bullflow GEX/VEX dealer-positioning report"]
+    evidence_report: Annotated[str, "Normalized confidence/data-quality/freshness evidence matrix"]
 
     # researcher team discussion step
     investment_debate_state: Annotated[
