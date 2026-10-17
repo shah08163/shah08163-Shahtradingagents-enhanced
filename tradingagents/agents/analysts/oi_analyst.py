@@ -20,7 +20,7 @@ Analyze {ticker} as of {trade_date}, focusing on Bullflow recorded flow plus Sch
 
 {instrument_context}
 
-Use only supplied evidence. Bullflow does NOT provide full-chain OI. When Schwab is available, distinguish snapshot OI concentrations from confirmed barriers; report near-ATM IV by expiration and side. A current Schwab snapshot must not be applied to historical trade dates.
+Use only supplied evidence. Bullflow does NOT provide full-chain OI. When Schwab is available, distinguish snapshot OI concentrations from confirmed barriers; report near-ATM IV by expiration and side; only report put/call skew when matched-strike comparison status is observed, and never infer zero skew from identical vendor IV. The chain scope is 0-60 DTE. A current Schwab snapshot must not be applied to historical trade dates.
 
 {data}
 
