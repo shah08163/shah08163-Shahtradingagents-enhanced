@@ -98,7 +98,7 @@ def service_client():
 
     from tradingagents.service.api import app
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost:8000") as client:
         yield client
 
 
