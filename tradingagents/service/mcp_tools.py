@@ -23,6 +23,14 @@ def run_trading_research(ticker: str, analysts: list[str] | None = None) -> dict
     Runs can take multiple minutes and may incur LLM usage costs.
     This tool never submits orders.
     """
+    from tradingagents.service.mcp_oauth import current_mcp_identity
+
+    identity = current_mcp_identity.get()
+    if identity:
+        from tradingagents.service.web_access import consume_quota
+
+        consume_quota(identity)
+
     from tradingagents.service.api import AnalyzeRequest, execute_analysis
 
     selected = analysts if analysts is not None else [
