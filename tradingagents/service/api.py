@@ -25,7 +25,7 @@ from tradingagents.service.auth_store import install_postgres_auth_store
 from tradingagents.service.web_chatgpt_auth import begin_sign_in, complete_sign_in
 
 DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
-ANALYST_ORDER = ["market", "social", "news", "fundamentals", "flow", "oi"]
+ANALYST_ORDER = ["market", "social", "news", "fundamentals", "flow", "oi", "dealer"]
 ALLOWED_ANALYSTS = frozenset(ANALYST_ORDER)
 API_TOKEN_ENV = "SHAHTRADINGAGENTS_API_TOKEN"
 DATABASE_URL_ENV = "DATABASE_URL"
@@ -35,8 +35,8 @@ install_postgres_auth_store()
 
 app = FastAPI(
     title="Shah TradingAgents API",
-    version="0.3.0",
-    description="Hosted TradingAgents research graph with optional Bullflow flow/OI analysts.",
+    version="0.4.0",
+    description="Hosted TradingAgents research graph with optional Bullflow flow/OI/GEX-VEX analysts.",
 )
 
 _bearer = HTTPBearer(auto_error=False)
@@ -206,9 +206,10 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             raise ValueError("Ticker cannot be blank.")
 
         analysts = _validated_analysts(request.analysts)
-        if request.asset_type != "stock" and ({"flow", "oi"} & set(analysts)):
-            raise ValueError("Bullflow flow/OI analysts currently support stock/ETF/index tickers, not crypto.")
-        if ({"flow", "oi"} & set(analysts)) and not os.environ.get(BULLFLOW_API_KEY_ENV):
+        bullflow_analysts = {"flow", "oi", "dealer"}
+        if request.asset_type != "stock" and (bullflow_analysts & set(analysts)):
+            raise ValueError("Bullflow flow/OI/dealer analysts currently support stock/ETF/index tickers, not crypto.")
+        if (bullflow_analysts & set(analysts)) and not os.environ.get(BULLFLOW_API_KEY_ENV):
             raise ValueError(
                 f"Bullflow analysts requested but {BULLFLOW_API_KEY_ENV} is not configured on the service."
             )
