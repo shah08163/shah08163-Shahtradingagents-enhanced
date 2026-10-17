@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from datetime import date
 from urllib.parse import urlsplit
@@ -42,6 +43,8 @@ def fetch_chain_summary(symbol: str, trade_date: str, max_dte: int = 60) -> str:
         by_expiry = {}
         by_strike = {}
         iv_by_expiry = {}
+        paired_iv = {}
+        underlying = (payload.get("underlying") or {}).get("last")
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -55,10 +58,30 @@ def fetch_chain_summary(symbol: str, trade_date: str, max_dte: int = 60) -> str:
                 wall_key = (expiry, side, strike)
                 by_strike[wall_key] = by_strike.get(wall_key, 0) + oi
             # Only usable near-ATM IV; avoid deep ITM IV artifacts and missing Greeks.
-            underlying = (payload.get("underlying") or {}).get("last")
-            if isinstance(iv, (int, float)) and 0 < iv < 500 and isinstance(underlying, (int, float)) and underlying > 0 and abs(strike / underlying - 1) <= 0.05:
+            if (isinstance(iv, (int, float)) and not isinstance(iv, bool)
+                    and math.isfinite(iv) and 0 < iv < 500
+                    and isinstance(underlying, (int, float)) and underlying > 0
+                    and abs(strike / underlying - 1) <= 0.05):
                 iv_by_expiry.setdefault(key, []).append(iv)
+                paired_iv.setdefault((expiry, strike), {})[side] = iv
         top = sorted(by_strike.items(), key=lambda kv: kv[1], reverse=True)[:30]
+        # Same-strike comparisons avoid calling the difference between disjoint
+        # average strike sets "skew". Identical provider IVs are inconclusive.
+        differences = {}
+        for (expiry, strike), sides in paired_iv.items():
+            if "CALL" in sides and "PUT" in sides:
+                differences.setdefault(expiry, []).append(sides["PUT"] - sides["CALL"])
+        skew = []
+        for expiry, values in sorted(differences.items()):
+            if len(values) < 2 or all(abs(v) < 0.01 for v in values):
+                skew.append({"expiration": expiry, "status": "unverified",
+                             "matched_strikes": len(values),
+                             "reason": "Insufficient independently differentiated put/call IV observations"})
+            else:
+                skew.append({"expiration": expiry, "status": "observed",
+                             "matched_strikes": len(values),
+                             "mean_put_minus_call_iv_percentage_points": round(sum(values) / len(values), 2)})
+
         result = {
             "source": "Schwab Market Data API via authenticated Schwab bridge",
             "symbol": symbol,
@@ -80,9 +103,11 @@ def fetch_chain_summary(symbol: str, trade_date: str, max_dte: int = 60) -> str:
                 {"expiration": e, "side": side, "mean_iv_pct": round(sum(values) / len(values), 2), "contracts": len(values)}
                 for (e, side), values in sorted(iv_by_expiry.items())
             ],
+            "near_atm_matched_strike_put_call_iv_comparison": skew,
             "limitations": [
                 "OI is a provider snapshot, not opening/closing intent or next-day OI change.",
                 "Near-ATM IV arithmetic means are descriptive, not standardized 30-day IV.",
+                "Identical call and put IV values do not prove zero skew; use matched-strike comparison status.",
                 "Provider fields and quote timestamps may be stale outside market hours.",
                 "A missing/partial chain cannot establish reliable full-market walls.",
             ],
