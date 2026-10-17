@@ -1,0 +1,140 @@
+"""HTTP API for the Shah TradingAgents deployment layer.
+
+This module intentionally wraps the upstream TradingAgentsGraph rather than
+modifying its research graph. That keeps upstream merges small and gives us a
+stable boundary for Northflank and, later, MCP.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import date
+from pathlib import Path
+from typing import Literal
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from tradingagents.default_config import build_default_config
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.llm_clients import chatgpt_auth
+
+DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
+ALLOWED_ANALYSTS = frozenset(DEFAULT_ANALYSTS)
+
+app = FastAPI(
+    title="Shah TradingAgents API",
+    version="0.1.0",
+    description="Service wrapper around the TradingAgents multi-agent research graph.",
+)
+
+
+class AnalyzeRequest(BaseModel):
+    ticker: str = Field(min_length=1, max_length=32)
+    trade_date: str | None = Field(
+        default=None,
+        description="Analysis date in YYYY-MM-DD. Defaults to today's date.",
+    )
+    asset_type: Literal["stock", "crypto"] = "stock"
+    analysts: list[str] = Field(default_factory=lambda: DEFAULT_ANALYSTS.copy())
+    checkpoint: bool | None = None
+    save_reports: bool = False
+    html_report: bool = True
+
+
+class AnalyzeResponse(BaseModel):
+    ticker: str
+    trade_date: str
+    asset_type: str
+    signal: str
+    analysts: list[str]
+    provider: str | None
+    quick_model: str | None
+    deep_model: str | None
+    final_state: dict
+    report_path: str | None = None
+
+
+def _json_safe(value):
+    """Convert LangGraph/model objects to JSON-safe primitives without losing text."""
+    return json.loads(json.dumps(value, default=str))
+
+
+def _validated_analysts(names: list[str]) -> list[str]:
+    cleaned = [name.strip().lower() for name in names if name and name.strip()]
+    if not cleaned:
+        raise ValueError("At least one analyst is required.")
+    unknown = sorted(set(cleaned) - ALLOWED_ANALYSTS)
+    if unknown:
+        raise ValueError(
+            f"Unsupported analysts: {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(ALLOWED_ANALYSTS))}."
+        )
+    # Keep a deterministic order while removing duplicates.
+    return [name for name in DEFAULT_ANALYSTS if name in set(cleaned)]
+
+
+@app.get("/health")
+def health() -> dict:
+    config = build_default_config()
+    provider = config.get("llm_provider")
+    signed_in = chatgpt_auth.signed_in_as() if provider == "chatgpt" else None
+    return {
+        "status": "ok",
+        "service": "shah-tradingagents",
+        "provider": provider,
+        "quick_model": config.get("quick_think_llm"),
+        "deep_model": config.get("deep_think_llm"),
+        "chatgpt_signed_in": bool(signed_in),
+        "chatgpt_account": signed_in,
+    }
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    try:
+        analysts = _validated_analysts(request.analysts)
+        trade_date = request.trade_date or date.today().isoformat()
+        config = build_default_config()
+        if request.checkpoint is not None:
+            config["checkpoint_enabled"] = request.checkpoint
+
+        graph = TradingAgentsGraph(
+            selected_analysts=analysts,
+            config=config,
+            debug=False,
+        )
+        final_state, signal = graph.propagate(
+            request.ticker.strip().upper(),
+            trade_date,
+            asset_type=request.asset_type,
+        )
+
+        report_path: Path | None = None
+        if request.save_reports:
+            report_path = graph.save_reports(
+                final_state,
+                request.ticker.strip().upper(),
+                html=request.html_report,
+            )
+
+        return AnalyzeResponse(
+            ticker=request.ticker.strip().upper(),
+            trade_date=trade_date,
+            asset_type=request.asset_type,
+            signal=str(signal),
+            analysts=analysts,
+            provider=config.get("llm_provider"),
+            quick_model=config.get("quick_think_llm"),
+            deep_model=config.get("deep_think_llm"),
+            final_state=_json_safe(final_state),
+            report_path=str(report_path) if report_path else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        # Keep provider credentials and internal stack details out of HTTP responses.
+        raise HTTPException(
+            status_code=500,
+            detail=f"TradingAgents analysis failed: {type(exc).__name__}: {exc}",
+        ) from exc
