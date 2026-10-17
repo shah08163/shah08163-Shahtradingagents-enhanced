@@ -18,7 +18,7 @@ from tradingagents.llm_clients import chatgpt_auth
 
 _ATTEMPT_TTL = 600
 _pending_lock = threading.Lock()
-_pending: dict[str, "PendingLogin"] = {}
+_pending: dict[str, PendingLogin] = {}
 
 
 @dataclass(frozen=True)
