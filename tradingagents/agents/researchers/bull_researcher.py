@@ -24,6 +24,9 @@ def create_bull_researcher(llm):
         dealer_report = report_or_absent(
             state.get("dealer_positioning_report", ""), "dealer positioning"
         )
+        evidence_report = report_or_absent(
+            state.get("evidence_report", ""), "confidence-weighted evidence"
+        )
         instrument_context = get_instrument_context_from_state(state)
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
@@ -40,6 +43,7 @@ Key points to focus on:
 - Competitive Advantages: Emphasize factors like unique products, strong branding, or dominant market positioning.
 - Positive Indicators: Use financial health, industry trends, technicals, and recent positive news as evidence.
 - Options Positioning: Use Bullflow directional flow, OI/fresh-positioning evidence, and GEX/VEX dealer-positioning estimates when supplied. Do not treat MULTI trades as directional without leg evidence, do not claim Bullflow represents complete market-wide volume or OI, and do not describe model-derived GEX/VEX as verified dealer inventory.
+- Evidence weighting: Respect the normalized evidence matrix. Low-quality, stale, or low-confidence evidence should carry less argumentative weight. You may disagree with the aggregate score, but if so explain which row deserves different treatment and why.
 - Bear Counterpoints: Critically analyze the bear argument with specific data and sound reasoning.
 
 Resources available:
@@ -51,6 +55,7 @@ Latest world affairs news: {news_report}
 Bullflow institutional options-flow report: {flow_report}
 Bullflow OI / fresh-positioning report: {oi_report}
 Bullflow GEX/VEX dealer-positioning report: {dealer_report}
+Confidence-weighted evidence matrix: {evidence_report}
 Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Use this information to deliver a compelling bull argument. Explicitly discuss whether options positioning and dealer-exposure estimates confirm or contradict the fundamental/technical bull thesis when those reports are available.
