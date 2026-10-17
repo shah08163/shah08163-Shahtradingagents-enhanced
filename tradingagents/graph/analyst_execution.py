@@ -51,6 +51,11 @@ ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
         agent_node="Open Interest Analyst",
         report_key="oi_report",
     ),
+    "dealer": AnalystNodeSpec(
+        key="dealer",
+        agent_node="Dealer Positioning Analyst",
+        report_key="dealer_positioning_report",
+    ),
 }
 
 
