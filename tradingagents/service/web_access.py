@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 COOKIE = "shah_session"
@@ -81,6 +81,20 @@ def issue_invite(data: InviteRequest, request: Request):
     # Fragment keeps invitation secret out of HTTP access logs and referrers.
     return {"email": email, "invite_url": base + "/app#invite=" + token,
             "expires_at": expires.isoformat(), "single_use": True}
+
+
+@router.post("/admin/revoke", dependencies=[Depends(owner)])
+def revoke_access(data: InviteRequest):
+    """Revoke outstanding invitations and all sessions for one invitee."""
+    email = data.email.strip().lower()
+    initialize()
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM shah_sessions WHERE email=%s", (email,))
+        sessions = cur.rowcount
+        cur.execute("DELETE FROM shah_invites WHERE email=%s", (email,))
+        invites = cur.rowcount
+        conn.commit()
+    return {"email": email, "sessions_revoked": sessions, "invites_revoked": invites}
 
 
 @router.post("/web/redeem")
