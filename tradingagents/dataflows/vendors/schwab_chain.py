@@ -68,7 +68,7 @@ def fetch_chain_summary(symbol: str, trade_date: str, max_dte: int = 60) -> str:
         # Same-strike comparisons avoid calling the difference between disjoint
         # average strike sets "skew". Identical provider IVs are inconclusive.
         differences = {}
-        for (expiry, strike), sides in paired_iv.items():
+        for (expiry, _strike), sides in paired_iv.items():
             if "CALL" in sides and "PUT" in sides:
                 differences.setdefault(expiry, []).append(sides["PUT"] - sides["CALL"])
         skew = []
