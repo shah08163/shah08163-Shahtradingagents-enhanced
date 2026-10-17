@@ -90,7 +90,9 @@ def begin_sign_in() -> str:
 def complete_sign_in(callback_url: str) -> None:
     parsed = urllib.parse.urlparse(callback_url.strip())
     params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-    if parsed.path != chatgpt_auth.CALLBACK_PATH:
+    callback_path = parsed.path.rstrip("/") or "/"
+    expected_path = chatgpt_auth.CALLBACK_PATH.rstrip("/") or "/"
+    if callback_path != expected_path:
         raise chatgpt_auth.ChatGPTAuthError("That is not a TradingAgents ChatGPT callback URL.")
 
     state = params.get("state") or ""
