@@ -102,3 +102,28 @@ def fetch_oi_bundle(ticker: str, trade_date: str) -> str:
         + trades
         + "\n\nIMPORTANT: This is recorded-flow OI context, not a complete market-wide option-chain OI snapshot."
     )
+
+
+def fetch_dealer_positioning_bundle(ticker: str, trade_date: str) -> str:
+    """Return Bullflow GEX/VEX evidence for dealer-positioning analysis.
+
+    The endpoint calculations are exposure estimates derived from option Greeks
+    and observed open interest or volume. They do not establish actual dealer
+    inventory, so downstream prompts must preserve that distinction.
+    """
+    oi_gex = _safe("netgex oi", lambda: _get("/v1/data/netgex", ticker=ticker, type="oi"))
+    volume_gex = _safe("netgex volume", lambda: _get("/v1/data/netgex", ticker=ticker, type="volume"))
+    vex = _safe("netvex", lambda: _get("/v1/data/netvex", ticker=ticker))
+    alerts = _safe(
+        "gexAlerts",
+        lambda: _get("/v1/data/gexAlerts", date=trade_date, ticker=ticker, limit=250),
+    )
+    return (
+        "## Bullflow OI-weighted GEX\n" + oi_gex
+        + "\n\n## Bullflow volume-weighted GEX\n" + volume_gex
+        + "\n\n## Bullflow VEX / vanna exposure\n" + vex
+        + "\n\n## Bullflow GEX alerts\n" + alerts
+        + "\n\nIMPORTANT: GEX/VEX are model-derived exposure estimates, not directly observed dealer positions. "
+          "Calls contribute positively and puts negatively in Bullflow GEX; interpret regime, node concentration, "
+          "and proximity rather than claiming verified dealer inventory."
+    )
