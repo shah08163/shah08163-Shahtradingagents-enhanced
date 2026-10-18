@@ -344,7 +344,7 @@ button{{padding:.65rem 1rem;cursor:pointer}}.muted{{color:#5f6368}}</style>
         status_code=status_code,
         headers={
             "Cache-Control": "no-store",
-            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'",
             "Referrer-Policy": "no-referrer",
             "X-Content-Type-Options": "nosniff",
         },
