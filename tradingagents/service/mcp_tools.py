@@ -3,7 +3,24 @@
 Authentication is enforced by the parent FastAPI app before MCP traffic reaches
 its ASGI mount. Never embed access tokens in plugin manifests.
 """
+from urllib.parse import urlsplit
+
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+
+from tradingagents.service.mcp_oauth import SERVICE_URL
+
+_mcp_public_host = urlsplit(SERVICE_URL).hostname
+_mcp_allowed_hosts = [
+    "localhost",
+    "localhost:*",
+    "127.0.0.1",
+    "127.0.0.1:*",
+    "[::1]",
+    "[::1]:*",
+]
+if _mcp_public_host:
+    _mcp_allowed_hosts.extend([_mcp_public_host, f"{_mcp_public_host}:*"])
 
 mcp = FastMCP(
     "Shah TradingAgents",
@@ -11,6 +28,7 @@ mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
+    transport_security=TransportSecuritySettings(allowed_hosts=_mcp_allowed_hosts),
 )
 
 

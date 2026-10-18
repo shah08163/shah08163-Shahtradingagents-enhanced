@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from tradingagents.service import api, web_access
+from tradingagents.service.mcp_oauth import SERVICE_URL
+
+
+def test_mcp_transport_security_allows_public_host():
+    host = urlsplit(SERVICE_URL).hostname
+    security = api.tradingagents_mcp.settings.transport_security
+
+    assert host
+    assert security is not None
+    assert security.enable_dns_rebinding_protection
+    assert host in security.allowed_hosts
+    assert f"{host}:*" in security.allowed_hosts
 
 
 def test_tools_list_and_research_call_use_default_analysts(monkeypatch, service_client):
