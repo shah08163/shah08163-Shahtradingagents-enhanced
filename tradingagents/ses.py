@@ -6,9 +6,10 @@ provide evidence scores and source metadata; reports are not scored by magic.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
-from typing import Literal, Sequence
+from typing import Literal
 
 VERSION = "SES-v1.0.0"
 ANALYSTS = ("market", "social", "news", "fundamentals", "flow", "oi", "dealer")
