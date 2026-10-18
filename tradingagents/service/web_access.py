@@ -76,7 +76,7 @@ class RedeemRequest(BaseModel):
 
 
 class OwnerLoginRequest(BaseModel):
-    api_token: str = Field(min_length=24, max_length=512)
+    api_token: str = Field(min_length=1, max_length=512)
 
 
 @router.post("/admin/invites", dependencies=[Depends(owner)])
