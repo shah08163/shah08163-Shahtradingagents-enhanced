@@ -11,12 +11,13 @@ import json
 import os
 import secrets
 from contextlib import asynccontextmanager
-from urllib.parse import urlsplit
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
 from tradingagents.dataflows.date_window import get_current_date
@@ -24,8 +25,6 @@ from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
 from tradingagents.service.auth_store import install_postgres_auth_store
-from mcp.server.transport_security import TransportSecuritySettings
-
 from tradingagents.service.mcp_oauth import (
     SERVICE_URL,
     bearer_challenge,
