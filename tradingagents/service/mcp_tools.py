@@ -5,6 +5,7 @@ its ASGI mount. Never embed access tokens in plugin manifests.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import threading
@@ -126,10 +127,8 @@ def _job_response(run_id: str, job: _ResearchJob, wait_seconds: int) -> dict:
             f"wait_seconds must be between 0 and {_RESEARCH_MAX_WAIT_SECONDS}."
         )
     if wait_seconds and not job.future.done():
-        try:
+        with contextlib.suppress(FutureTimeout):
             job.future.result(timeout=wait_seconds)
-        except FutureTimeout:
-            pass
 
     metadata = {
         "run_id": run_id,
@@ -187,8 +186,8 @@ def run_trading_research(
     else:
         selected = analysts
 
-    from tradingagents.service.web_access import consume_quota
     from tradingagents.service.api import AnalyzeRequest
+    from tradingagents.service.web_access import consume_quota
 
     consume_quota(identity)
     request = AnalyzeRequest(
