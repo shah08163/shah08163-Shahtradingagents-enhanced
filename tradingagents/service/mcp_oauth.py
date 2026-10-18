@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import html
 import json
 import os
@@ -57,6 +58,19 @@ def _b64url(raw: bytes) -> str:
 
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _authorization_code(flow_id: str) -> str:
+    """Derive a retry-safe code for one flow without storing it in plaintext."""
+    secret = os.environ.get("SHAHTRADINGAGENTS_API_TOKEN", "")
+    if not secret:
+        raise HTTPException(503, "OAuth sign-in is not configured.")
+    value = hmac.new(
+        secret.encode("utf-8"),
+        f"shah-oauth-code-v1:{flow_id}".encode(),
+        hashlib.sha256,
+    ).digest()
+    return _b64url(value)
 
 
 def _allowed_resource(value: str) -> bool:
@@ -130,7 +144,17 @@ def _ensure_tables() -> None:
                 code_challenge TEXT NOT NULL,
                 resource TEXT NOT NULL,
                 scope TEXT NOT NULL,
-                expires_at TIMESTAMPTZ NOT NULL)"""
+                expires_at TIMESTAMPTZ NOT NULL,
+                completed_at TIMESTAMPTZ,
+                completed_email TEXT)"""
+        )
+        # Store consent completion so duplicate form submissions can safely
+        # return the same still-valid authorization code.
+        cursor.execute(
+            "ALTER TABLE shah_oauth_flows ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ"
+        )
+        cursor.execute(
+            "ALTER TABLE shah_oauth_flows ADD COLUMN IF NOT EXISTS completed_email TEXT"
         )
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS shah_oauth_codes (
@@ -264,6 +288,7 @@ def _new_flow(
     _ensure_tables()
     flow_id = secrets.token_urlsafe(32)
     with _db() as connection, connection.cursor() as cursor:
+        cursor.execute("DELETE FROM shah_oauth_flows WHERE expires_at <= NOW()")
         cursor.execute(
             """INSERT INTO shah_oauth_flows
                 (flow_hash, client_id, redirect_uri, state, code_challenge,
@@ -367,38 +392,60 @@ def _redirect_with_error(flow: dict[str, Any], error: str) -> RedirectResponse:
     return RedirectResponse(f"{flow['redirect_uri']}?{query}", status_code=303)
 
 
-def _finish_authorization(flow_id: str, email: str) -> RedirectResponse:
+def _finish_authorization(flow_id: str, email: str) -> RedirectResponse | HTMLResponse:
     _ensure_tables()
     with _db() as connection, connection.cursor() as cursor:
         cursor.execute(
-            """DELETE FROM shah_oauth_flows
+            """SELECT client_id, redirect_uri, state, code_challenge, resource, scope,
+                      completed_at, completed_email
+                FROM shah_oauth_flows
                 WHERE flow_hash = %s AND expires_at > NOW()
-                RETURNING client_id, redirect_uri, state, code_challenge, resource, scope""",
+                FOR UPDATE""",
             (_digest(flow_id),),
         )
         row = cursor.fetchone()
         if not row:
             raise HTTPException(400, "This sign-in request expired. Start again from ChatGPT.")
-        code = secrets.token_urlsafe(32)
-        cursor.execute(
-            """INSERT INTO shah_oauth_codes
-                (code_hash, client_id, redirect_uri, email, code_challenge,
-                 resource, scope, expires_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (
-                _digest(code),
-                row[0],
-                row[1],
-                email,
-                row[3],
-                row[4],
-                row[5],
-                datetime.now(UTC) + timedelta(seconds=CODE_TTL_SECONDS),
-            ),
-        )
+        if row[6] is not None:
+            if row[7] != email:
+                raise HTTPException(400, "This sign-in request expired. Start again from ChatGPT.")
+            code = _authorization_code(flow_id)
+            cursor.execute(
+                "SELECT 1 FROM shah_oauth_codes WHERE code_hash = %s AND expires_at > NOW()",
+                (_digest(code),),
+            )
+            if not cursor.fetchone():
+                return _page(
+                    "Authorization complete",
+                    "<p>This request was already processed. Return to ChatGPT.</p>",
+                )
+        else:
+            code = _authorization_code(flow_id)
+            code_expires_at = datetime.now(UTC) + timedelta(seconds=CODE_TTL_SECONDS)
+            cursor.execute(
+                """INSERT INTO shah_oauth_codes
+                    (code_hash, client_id, redirect_uri, email, code_challenge,
+                     resource, scope, expires_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    _digest(code),
+                    row[0],
+                    row[1],
+                    email,
+                    row[3],
+                    row[4],
+                    row[5],
+                    code_expires_at,
+                ),
+            )
+            cursor.execute(
+                """UPDATE shah_oauth_flows
+                    SET completed_at = %s, completed_email = %s, expires_at = %s
+                    WHERE flow_hash = %s""",
+                (datetime.now(UTC), email, code_expires_at, _digest(flow_id)),
+            )
     query = urllib.parse.urlencode({"code": code, "state": row[2], "iss": ISSUER})
     return RedirectResponse(f"{row[1]}?{query}", status_code=303)
-
 
 @router.get("/.well-known/oauth-protected-resource/mcp")
 def protected_resource_metadata() -> dict[str, Any]:

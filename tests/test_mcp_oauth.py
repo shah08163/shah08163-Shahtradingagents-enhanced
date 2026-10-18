@@ -56,11 +56,22 @@ class _FakeCursor:
             redirects = self.database.clients.get(params[0])
             self.row = (redirects,) if redirects else None
         elif "INSERT INTO shah_oauth_flows" in query:
-            self.database.flows[params[0]] = tuple(params[1:7])
-        elif "SELECT client_id, redirect_uri, state, code_challenge, resource, scope" in query:
+            self.database.flows[params[0]] = tuple(params[1:7]) + (None, None)
+        elif "completed_at, completed_email" in query:
             self.row = self.database.flows.get(params[0])
+        elif "SELECT client_id, redirect_uri, state, code_challenge, resource, scope" in query:
+            flow = self.database.flows.get(params[0])
+            self.row = flow[:6] if flow else None
+        elif "UPDATE shah_oauth_flows" in query:
+            flow = self.database.flows[params[3]]
+            self.database.flows[params[3]] = flow[:6] + (params[0], params[1])
+        elif "DELETE FROM shah_oauth_flows WHERE expires_at <= NOW()" in query:
+            self.row = None
         elif "DELETE FROM shah_oauth_flows" in query:
             self.row = self.database.flows.pop(params[0], None)
+        elif "SELECT 1 FROM shah_oauth_codes" in query:
+            expected = self.database.code
+            self.row = (1,) if expected and expected[0][0] == params[0] else None
         elif "INSERT INTO shah_oauth_codes" in query:
             self.database.code = (
                 (params[0], params[1], params[2], params[4], params[5]),
@@ -220,6 +231,7 @@ def test_dynamic_client_registration_only_accepts_chatgpt_callbacks(client, monk
 
 def test_authorization_code_flow_uses_invite_identity_and_pkce(client, monkeypatch):
     database = _FakeDatabase()
+    monkeypatch.setenv("SHAHTRADINGAGENTS_API_TOKEN", "test-owner-token")
     monkeypatch.setattr(mcp_oauth, "_ensure_tables", lambda: None)
     monkeypatch.setattr(mcp_oauth, "_db", database.connect)
     monkeypatch.setattr(mcp_oauth, "ISSUER", "https://testserver")
@@ -252,6 +264,13 @@ def test_authorization_code_flow_uses_invite_identity_and_pkce(client, monkeypat
     )
     assert consent.status_code == 303
     callback = consent.headers["location"]
+    repeated_consent = client.post(
+        "/oauth/consent",
+        data={"flow_id": flow_id, "decision": "allow"},
+        headers={"origin": "https://testserver"},
+    )
+    assert repeated_consent.status_code == 303
+    assert repeated_consent.headers["location"] == callback
     callback_params = parse_qs(urlsplit(callback).query)
     assert callback.startswith(CHATGPT_CALLBACK + "?")
     assert callback_params["state"] == ["opaque-state"]
