@@ -222,6 +222,7 @@ def test_authorization_code_flow_uses_invite_identity_and_pkce(client, monkeypat
     database = _FakeDatabase()
     monkeypatch.setattr(mcp_oauth, "_ensure_tables", lambda: None)
     monkeypatch.setattr(mcp_oauth, "_db", database.connect)
+    monkeypatch.setattr(mcp_oauth, "ISSUER", "https://testserver")
     registered = client.post("/oauth/register", json={"redirect_uris": [CHATGPT_CALLBACK]})
     client_id = registered.json()["client_id"]
 
@@ -442,6 +443,7 @@ def test_owner_signin_page_explains_render_key_flow():
 def test_owner_oauth_login_validates_key_and_sets_session(client, monkeypatch):
     database = _FakeDatabase()
     monkeypatch.setattr(mcp_oauth, "_load_flow", lambda flow_id: {"state": "pending"})
+    monkeypatch.setattr(mcp_oauth, "ISSUER", "https://testserver")
     monkeypatch.setenv("SHAHTRADINGAGENTS_API_TOKEN", "owner-test-key")
 
     from tradingagents.service import web_access
@@ -455,7 +457,7 @@ def test_owner_oauth_login_validates_key_and_sets_session(client, monkeypatch):
             "email": "Owner@Example.com",
             "owner_token": "owner-test-key",
         },
-        headers={"origin": "https://testserver"},
+        headers={"origin": "https://testserver", "host": "internal.render.local:10000"},
     )
 
     assert response.status_code == 303
@@ -470,6 +472,7 @@ def test_owner_oauth_login_validates_key_and_sets_session(client, monkeypatch):
 
 def test_owner_oauth_login_rejects_bad_key_and_cross_site_form(client, monkeypatch):
     monkeypatch.setattr(mcp_oauth, "_load_flow", lambda flow_id: {"state": "pending"})
+    monkeypatch.setattr(mcp_oauth, "ISSUER", "https://testserver")
     monkeypatch.setenv("SHAHTRADINGAGENTS_API_TOKEN", "expected-owner-key")
 
     rejected = client.post(
@@ -484,6 +487,22 @@ def test_owner_oauth_login_rejects_bad_key_and_cross_site_form(client, monkeypat
     assert rejected.status_code == 200
     assert "did not match" in rejected.text
     assert "wrong-key" not in rejected.text
+
+    no_origin = client.post(
+        "/oauth/owner-login",
+        data={
+            "flow_id": "flow-123",
+            "email": "owner@example.com",
+            "owner_token": "wrong-key",
+        },
+        headers={
+            "sec-fetch-site": "same-origin",
+            "x-forwarded-host": "testserver",
+            "x-forwarded-proto": "https",
+        },
+    )
+    assert no_origin.status_code == 200
+    assert "did not match" in no_origin.text
 
     csrf = client.post(
         "/oauth/owner-login",
