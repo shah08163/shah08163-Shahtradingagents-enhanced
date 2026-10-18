@@ -67,7 +67,7 @@ def _authorization_code(flow_id: str) -> str:
         raise HTTPException(503, "OAuth sign-in is not configured.")
     value = hmac.new(
         secret.encode("utf-8"),
-        f"shah-oauth-code-v1:{flow_id}".encode("utf-8"),
+        f"shah-oauth-code-v1:{flow_id}".encode(),
         hashlib.sha256,
     ).digest()
     return _b64url(value)
