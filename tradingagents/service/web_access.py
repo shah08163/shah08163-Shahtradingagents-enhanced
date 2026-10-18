@@ -24,6 +24,12 @@ def digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def owner_token_valid(supplied: str) -> bool:
+    """Check the owner bearer credential without exposing it to callers."""
+    expected = os.environ.get("SHAHTRADINGAGENTS_API_TOKEN", "")
+    return bool(expected) and bool(supplied) and secrets.compare_digest(supplied, expected)
+
+
 def db():
     return psycopg.connect(os.environ["DATABASE_URL"])
 
@@ -52,9 +58,8 @@ def browser_origin(request: Request):
 
 
 def owner(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_admin_bearer)] = None):
-    expected = os.environ.get("SHAHTRADINGAGENTS_API_TOKEN", "")
     supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
-    if not expected or not secrets.compare_digest(supplied, expected):
+    if not owner_token_valid(supplied):
         raise HTTPException(401, "Unauthorized")
 
 
