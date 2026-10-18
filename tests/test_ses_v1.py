@@ -2,7 +2,11 @@
 import pytest
 
 from tradingagents.ses import (
-    AnalystEvidence, TradeGate, classify, decide_trade, score_evidence,
+    AnalystEvidence,
+    TradeGate,
+    classify,
+    decide_trade,
+    score_evidence,
 )
 from tradingagents.ses_calibration import Outcome, evaluate_outcomes
 
