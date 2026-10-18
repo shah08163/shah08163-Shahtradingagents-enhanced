@@ -13,11 +13,9 @@ import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
 from tradingagents.dataflows.date_window import get_current_date
@@ -26,7 +24,6 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients import chatgpt_auth
 from tradingagents.service.auth_store import install_postgres_auth_store
 from tradingagents.service.mcp_oauth import (
-    SERVICE_URL,
     bearer_challenge,
     current_mcp_identity,
     router as mcp_oauth_router,
@@ -319,17 +316,4 @@ async def require_mcp_token(request: Request, call_next):
     return await call_next(request)
 
 
-_mcp_public_host = urlsplit(SERVICE_URL).hostname or ""
-_mcp_transport_security = TransportSecuritySettings(
-    allowed_hosts=[
-        _mcp_public_host,
-        f"{_mcp_public_host}:*",
-    ] if _mcp_public_host else [],
-)
-
-app.mount(
-    "/mcp",
-    tradingagents_mcp.streamable_http_app(
-        transport_security=_mcp_transport_security,
-    ),
-)
+app.mount("/mcp", tradingagents_mcp.streamable_http_app())
