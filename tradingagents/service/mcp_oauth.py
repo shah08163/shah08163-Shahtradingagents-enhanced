@@ -558,8 +558,60 @@ def _parse_form(raw: bytes, content_type: str) -> dict[str, str]:
 
 
 def _same_origin_form(request: Request) -> None:
-    host = request.headers.get("host", "")
-    if not host or request.headers.get("origin") != f"https://{host}":
+    expected = urllib.parse.urlsplit(ISSUER)
+    expected_host = (expected.hostname or "").lower()
+    expected_port = expected.port or 443
+    origin = request.headers.get("origin", "").strip()
+
+    same_origin = False
+    if origin and origin.lower() != "null":
+        try:
+            parsed_origin = urllib.parse.urlsplit(origin)
+            origin_port = parsed_origin.port or (
+                443 if parsed_origin.scheme.lower() == "https" else None
+            )
+        except ValueError:
+            parsed_origin = None
+            origin_port = None
+        same_origin = bool(
+            parsed_origin
+            and expected.scheme.lower() == "https"
+            and parsed_origin.scheme.lower() == "https"
+            and parsed_origin.hostname
+            and parsed_origin.hostname.lower() == expected_host
+            and origin_port == expected_port
+            and parsed_origin.path in {"", "/"}
+            and not parsed_origin.query
+            and not parsed_origin.fragment
+            and not parsed_origin.username
+            and not parsed_origin.password
+        )
+    elif expected.scheme.lower() == "https":
+        # Embedded browsers can omit Origin. In that case, require browser
+        # Fetch Metadata and Render's forwarded public HTTPS authority.
+        fetch_site = request.headers.get("sec-fetch-site", "").lower()
+        forwarded_proto = (
+            request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+        )
+        forwarded_host = (
+            request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+        ) or request.headers.get("host", "").strip()
+        try:
+            parsed_host = urllib.parse.urlsplit(f"//{forwarded_host}")
+            forwarded_port = parsed_host.port or 443
+        except ValueError:
+            parsed_host = None
+            forwarded_port = None
+        same_origin = bool(
+            fetch_site == "same-origin"
+            and forwarded_proto == "https"
+            and parsed_host
+            and parsed_host.hostname
+            and parsed_host.hostname.lower() == expected_host
+            and forwarded_port == expected_port
+        )
+
+    if not same_origin:
         raise HTTPException(403, "Same-origin HTTPS form submission required.")
 
 
