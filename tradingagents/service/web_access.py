@@ -17,6 +17,8 @@ router = APIRouter()
 _admin_bearer = HTTPBearer(auto_error=False)
 COOKIE = "shah_session"
 SESSION_HOURS = 12
+ADMIN_COOKIE = "shah_owner_session"
+ADMIN_SESSION_HOURS = 12
 DAILY_LIMIT = 3
 
 
@@ -41,6 +43,8 @@ def initialize():
             redeemed_at TIMESTAMPTZ)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS shah_sessions (
             token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS shah_admin_sessions (
+            token_hash TEXT PRIMARY KEY, expires_at TIMESTAMPTZ NOT NULL)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS shah_web_usage (
             email TEXT NOT NULL, run_date DATE NOT NULL, used INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (email, run_date))""")
@@ -69,6 +73,10 @@ class InviteRequest(BaseModel):
 
 class RedeemRequest(BaseModel):
     token: str = Field(min_length=24, max_length=200)
+
+
+class OwnerLoginRequest(BaseModel):
+    api_token: str = Field(min_length=1, max_length=512)
 
 
 @router.post("/admin/invites", dependencies=[Depends(owner)])
@@ -158,6 +166,59 @@ def logout(request: Request, response: Response):
             conn.commit()
     response.delete_cookie(COOKIE, path="/")
     return {"signed_out": True}
+
+
+def admin_session_valid(request: Request) -> bool:
+    token = request.cookies.get(ADMIN_COOKIE, "")
+    if not token:
+        return False
+    initialize()
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM shah_admin_sessions WHERE token_hash=%s AND expires_at>NOW()",
+                    (digest(token),))
+        return cur.fetchone() is not None
+
+
+@router.get("/web/admin/me")
+def web_admin_me(request: Request):
+    return {"owner": admin_session_valid(request)}
+
+
+@router.post("/web/admin/login")
+def web_admin_login(data: OwnerLoginRequest, request: Request, response: Response):
+    browser_origin(request)
+    if not owner_token_valid(data.api_token):
+        raise HTTPException(401, "The Render API key did not match.")
+    initialize()
+    token = secrets.token_urlsafe(40)
+    expires = datetime.now(UTC) + timedelta(hours=ADMIN_SESSION_HOURS)
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO shah_admin_sessions (token_hash,expires_at) VALUES (%s,%s)",
+                    (digest(token), expires))
+        conn.commit()
+    response.set_cookie(ADMIN_COOKIE, token, secure=True, httponly=True,
+                        samesite="strict", max_age=ADMIN_SESSION_HOURS * 3600, path="/")
+    return {"owner": True, "expires_at": expires.isoformat()}
+
+
+@router.post("/web/admin/logout")
+def web_admin_logout(request: Request, response: Response):
+    browser_origin(request)
+    token = request.cookies.get(ADMIN_COOKIE, "")
+    if token:
+        with db() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM shah_admin_sessions WHERE token_hash=%s", (digest(token),))
+            conn.commit()
+    response.delete_cookie(ADMIN_COOKIE, path="/")
+    return {"signed_out": True}
+
+
+@router.post("/web/admin/invites")
+def web_admin_issue_invite(data: InviteRequest, request: Request):
+    browser_origin(request)
+    if not admin_session_valid(request):
+        raise HTTPException(401, "Unlock owner tools first.")
+    return issue_invite(data, request)
 
 
 def consume_quota(email: str):
