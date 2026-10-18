@@ -29,7 +29,9 @@ class _FakeCursor:
         return False
 
     def execute(self, query, params=None):
-        if "DELETE FROM shah_oauth_codes" in query:
+        if "INSERT INTO shah_sessions" in query:
+            self.database.sessions[params[0]] = tuple(params[1:])
+        elif "DELETE FROM shah_oauth_codes" in query:
             expected = self.database.code
             if expected and tuple(params) == expected[0]:
                 self.row = expected[1]
@@ -84,11 +86,15 @@ class _FakeConnection:
     def cursor(self):
         return _FakeCursor(self.database)
 
+    def commit(self):
+        return None
+
 
 class _FakeDatabase:
     def __init__(self):
         self.code = None
         self.access_token = None
+        self.sessions = {}
         self.refresh_tokens = {}
         self.clients = {}
         self.flows = {}
@@ -421,3 +427,71 @@ def test_offline_access_issues_rotating_refresh_tokens(client, monkeypatch):
     assert reused.status_code == 400
     assert reused.json()["error"] == "invalid_grant"
 
+
+
+def test_owner_signin_page_explains_render_key_flow():
+    page = mcp_oauth._login_page("flow-123")
+    body = page.body.decode()
+
+    assert "SHAHTRADINGAGENTS_API_TOKEN" in body
+    assert 'action="/oauth/owner-login"' in body
+    assert "you do not need to create an invitation code" in body
+    assert "Invitation code" in body
+
+
+def test_owner_oauth_login_validates_key_and_sets_session(client, monkeypatch):
+    database = _FakeDatabase()
+    monkeypatch.setattr(mcp_oauth, "_load_flow", lambda flow_id: {"state": "pending"})
+    monkeypatch.setenv("SHAHTRADINGAGENTS_API_TOKEN", "owner-test-key")
+
+    from tradingagents.service import web_access
+
+    monkeypatch.setattr(web_access, "db", database.connect)
+    monkeypatch.setattr(web_access, "initialize", lambda: None)
+    response = client.post(
+        "/oauth/owner-login",
+        data={
+            "flow_id": "flow-123",
+            "email": "Owner@Example.com",
+            "owner_token": "owner-test-key",
+        },
+        headers={"origin": "https://testserver"},
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/oauth/authorize?flow=flow-123"
+    assert "shah_session=" in response.headers["set-cookie"]
+    assert response.headers["cache-control"] == "no-store"
+    assert len(database.sessions) == 1
+    session_hash, (email, _) = next(iter(database.sessions.items()))
+    assert email == "owner@example.com"
+    assert session_hash != "owner-test-key"
+
+
+def test_owner_oauth_login_rejects_bad_key_and_cross_site_form(client, monkeypatch):
+    monkeypatch.setattr(mcp_oauth, "_load_flow", lambda flow_id: {"state": "pending"})
+    monkeypatch.setenv("SHAHTRADINGAGENTS_API_TOKEN", "expected-owner-key")
+
+    rejected = client.post(
+        "/oauth/owner-login",
+        data={
+            "flow_id": "flow-123",
+            "email": "owner@example.com",
+            "owner_token": "wrong-key",
+        },
+        headers={"origin": "https://testserver"},
+    )
+    assert rejected.status_code == 200
+    assert "did not match" in rejected.text
+    assert "wrong-key" not in rejected.text
+
+    csrf = client.post(
+        "/oauth/owner-login",
+        data={
+            "flow_id": "flow-123",
+            "email": "owner@example.com",
+            "owner_token": "expected-owner-key",
+        },
+        headers={"origin": "https://attacker.example"},
+    )
+    assert csrf.status_code == 403
