@@ -329,13 +329,23 @@ button{{padding:.65rem 1rem;cursor:pointer}}.muted{{color:#5f6368}}</style>
 def _login_page(flow_id: str, message: str | None = None) -> HTMLResponse:
     safe_id = html.escape(flow_id, quote=True)
     note = f'<p role="alert">{html.escape(message)}</p>' if message else ""
-    body = f"""{note}<p>Sign in with a Shah TradingAgents invitation to connect this read-only research server.</p>
+    body = f"""{note}<p>Connect ChatGPT to your read-only Shah TradingAgents research server. If you own the server, use its Render API key below; you do not need to create an invitation code.</p>
+<details open><summary>Sign in as the server owner</summary>
+<p class="muted">In Render, open the Shah TradingAgents service, choose Environment, and copy <code>SHAHTRADINGAGENTS_API_TOKEN</code>. Enter it here. It is sent only to this server over HTTPS, is never put in the URL, and is used only for this sign-in; the server does not store it.</p>
+<form method="post" action="/oauth/owner-login" autocomplete="off">
+<input type="hidden" name="flow_id" value="{safe_id}">
+<label for="owner_email">Email identity</label>
+<input id="owner_email" name="email" type="email" maxlength="254" value="desaishah22@gmail.com" autocomplete="email" required>
+<label for="owner_token">Render API key</label>
+<input id="owner_token" name="owner_token" type="password" autocomplete="off" required>
+<button type="submit">Continue as owner</button></form></details>
+<details><summary>Have an invitation code?</summary>
 <form method="post" action="/oauth/login">
 <input type="hidden" name="flow_id" value="{safe_id}">
 <label for="invite">Invitation code</label>
 <input id="invite" name="invite" type="password" autocomplete="one-time-code" required>
-<button type="submit">Continue</button></form>
-<p class="muted">The code is single-use. If you already signed in, return to ChatGPT and retry.</p>"""
+<button type="submit">Continue with invitation</button></form>
+<p class="muted">The code is single-use.</p></details>"""
     return _page("Sign in to Shah TradingAgents", body)
 
 
@@ -584,6 +594,63 @@ async def oauth_login(request: Request):
         )
     response = RedirectResponse(
         f"/oauth/authorize?flow={urllib.parse.quote(flow_id)}", status_code=303
+    )
+    response.set_cookie(
+        COOKIE,
+        session,
+        secure=True,
+        httponly=True,
+        samesite="strict",
+        max_age=SESSION_HOURS * 3600,
+        path="/",
+    )
+    return response
+
+
+@router.post("/oauth/owner-login")
+async def oauth_owner_login(request: Request):
+    """Let the service owner authorize ChatGPT without first minting an invite."""
+    _same_origin_form(request)
+    fields = _parse_form(await request.body(), request.headers.get("content-type", ""))
+    flow_id = fields.get("flow_id", "")
+    flow = _load_flow(flow_id)
+    if not flow:
+        return _page("Sign-in expired", "<p>Return to ChatGPT and start the connection again.</p>", 400)
+
+    from tradingagents.service.web_access import (
+        COOKIE,
+        SESSION_HOURS,
+        db,
+        digest,
+        initialize,
+        owner_token_valid,
+    )
+
+    if not owner_token_valid(fields.get("owner_token", "")):
+        return _login_page(flow_id, "The Render API key did not match. Check it and try again.")
+
+    email = fields.get("email", "").strip().lower()
+    if (
+        len(email) < 3
+        or len(email) > 254
+        or "@" not in email
+        or any(char in email for char in (" ", "/", "\\", "\n", "\r"))
+    ):
+        return _login_page(flow_id, "Enter a valid email identity and try again.")
+
+    initialize()
+    now = datetime.now(UTC)
+    session = secrets.token_urlsafe(40)
+    with db() as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO shah_sessions (token_hash,email,expires_at) VALUES (%s,%s,%s)",
+            (digest(session), email, now + timedelta(hours=SESSION_HOURS)),
+        )
+        connection.commit()
+    response = RedirectResponse(
+        f"/oauth/authorize?flow={urllib.parse.quote(flow_id)}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
     )
     response.set_cookie(
         COOKIE,
