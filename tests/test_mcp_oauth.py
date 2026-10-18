@@ -86,6 +86,9 @@ class _FakeConnection:
     def cursor(self):
         return _FakeCursor(self.database)
 
+    def commit(self):
+        return None
+
 
 class _FakeDatabase:
     def __init__(self):
