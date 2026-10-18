@@ -36,6 +36,12 @@ dev = [
     "pytest>=8.0",
     "pytest-subtests>=0.13",
 ]
+service = [
+    "fastapi>=0.115",
+    "mcp>=1.12,<2",
+    "psycopg[binary]>=3.2",
+    "uvicorn[standard]>=0.34",
+]
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
 # stays lean: pip install "tradingagents[bedrock]".
 bedrock = [
@@ -44,6 +50,7 @@ bedrock = [
 
 [project.scripts]
 tradingagents = "cli.main:app"
+shahtradingagents-api = "tradingagents.service.main:run"
 
 [tool.setuptools.dynamic]
 version = {attr = "tradingagents.__version__"}
@@ -53,7 +60,7 @@ include = ["tradingagents*", "cli*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
-tradingagents = ["assets/*.svg"]
+tradingagents = ["assets/*.svg", "service/dashboard.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
