@@ -5,13 +5,13 @@ its ASGI mount. Never embed access tokens in plugin manifests.
 """
 from __future__ import annotations
 
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
-from contextvars import copy_context
-from dataclasses import dataclass
 import logging
 import secrets
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
+from contextvars import copy_context
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
