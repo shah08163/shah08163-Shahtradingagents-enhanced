@@ -36,9 +36,12 @@ AUTHORIZATION_ENDPOINT = f"{ISSUER}/oauth/authorize"
 TOKEN_ENDPOINT = f"{ISSUER}/oauth/token"
 REGISTRATION_ENDPOINT = f"{ISSUER}/oauth/register"
 RESEARCH_SCOPE = "research:read"
+OFFLINE_ACCESS_SCOPE = "offline_access"
+SUPPORTED_SCOPES = (RESEARCH_SCOPE, OFFLINE_ACCESS_SCOPE)
 FLOW_TTL_SECONDS = 600
 CODE_TTL_SECONDS = 600
 ACCESS_TOKEN_TTL_SECONDS = 3600
+REFRESH_TOKEN_TTL_SECONDS = 90 * 24 * 60 * 60
 MAX_REQUEST_BODY = 16_384
 MAX_CIMD_BYTES = 65_536
 
@@ -150,6 +153,27 @@ def _ensure_tables() -> None:
                 expires_at TIMESTAMPTZ NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""
         )
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS shah_oauth_refresh_tokens (
+                token_hash TEXT PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                expires_at TIMESTAMPTZ NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""
+        )
+
+
+def _normalize_scope(scope: str, *, allowed: set[str] | None = None) -> str | None:
+    scopes = scope.split()
+    if not scopes or len(scopes) != len(set(scopes)):
+        return None
+    values = set(scopes)
+    allowed_scopes = set(SUPPORTED_SCOPES) if allowed is None else allowed
+    if RESEARCH_SCOPE not in values or not values.issubset(allowed_scopes):
+        return None
+    return " ".join(item for item in SUPPORTED_SCOPES if item in values)
 
 
 def _client_metadata(client_id: str) -> dict[str, Any]:
@@ -235,6 +259,7 @@ def _new_flow(
     state: str,
     code_challenge: str,
     resource: str,
+    scope: str,
 ) -> str:
     _ensure_tables()
     flow_id = secrets.token_urlsafe(32)
@@ -251,7 +276,7 @@ def _new_flow(
                 state,
                 code_challenge,
                 resource,
-                RESEARCH_SCOPE,
+                scope,
                 datetime.now(UTC) + timedelta(seconds=FLOW_TTL_SECONDS),
             ),
         )
@@ -385,10 +410,10 @@ def authorization_server_metadata() -> dict[str, Any]:
         "client_id_metadata_document_supported": True,
         "authorization_response_iss_parameter_supported": True,
         "token_endpoint_auth_methods_supported": ["none"],
-        "grant_types_supported": ["authorization_code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
         "response_types_supported": ["code"],
         "code_challenge_methods_supported": ["S256"],
-        "scopes_supported": [RESEARCH_SCOPE],
+        "scopes_supported": list(SUPPORTED_SCOPES),
     }
 
 
@@ -415,7 +440,14 @@ async def register_client(request: Request) -> JSONResponse:
         or not redirects
         or len(redirects) > 10
         or any(not isinstance(uri, str) or not _allowed_redirect_uri(uri) for uri in redirects)
-        or requested_grants != ["authorization_code"]
+        or not isinstance(requested_grants, list)
+        or not all(isinstance(grant, str) for grant in requested_grants)
+        or len(requested_grants) != len(set(requested_grants))
+        or set(requested_grants)
+        not in (
+            {"authorization_code"},
+            {"authorization_code", "refresh_token"},
+        )
         or requested_responses != ["code"]
         or requested_auth_method != "none"
     ):
@@ -432,7 +464,7 @@ async def register_client(request: Request) -> JSONResponse:
             "client_id": client_id,
             "client_id_issued_at": int(time.time()),
             "redirect_uris": redirects,
-            "grant_types": ["authorization_code"],
+            "grant_types": requested_grants,
             "response_types": ["code"],
             "token_endpoint_auth_method": "none",
             "client_name": str(payload.get("client_name") or "ChatGPT")[:128],
@@ -457,7 +489,7 @@ def authorize(request: Request):
         state = params.get("state", "")
         code_challenge = params.get("code_challenge", "")
         resource = params.get("resource", "")
-        requested_scopes = params.get("scope", RESEARCH_SCOPE).split()
+        requested_scope = _normalize_scope(params.get("scope", RESEARCH_SCOPE))
         try:
             redirects = _client_redirects(client_id) if client_id else None
         except (OSError, ValueError):
@@ -472,7 +504,7 @@ def authorize(request: Request):
             or redirect_uri not in redirects
             or not _allowed_redirect_uri(redirect_uri)
             or not _allowed_resource(resource)
-            or requested_scopes != [RESEARCH_SCOPE]
+            or requested_scope is None
         ):
             return _page(
                 "Cannot connect",
@@ -486,7 +518,9 @@ def authorize(request: Request):
                 _store_cimd_client(client_id, redirects)
             except ValueError as exc:
                 return _page("Cannot connect", f"<p>{html.escape(str(exc))}</p>", 400)
-        flow_id = _new_flow(client_id, redirect_uri, state, code_challenge, resource)
+        flow_id = _new_flow(
+            client_id, redirect_uri, state, code_challenge, resource, requested_scope
+        )
 
     from tradingagents.service.web_access import session_email
 
@@ -596,36 +630,72 @@ async def oauth_consent(request: Request):
 @router.post("/oauth/token")
 async def token(request: Request) -> JSONResponse:
     fields = _parse_form(await request.body(), request.headers.get("content-type", ""))
-    if fields.get("grant_type") != "authorization_code":
-        return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
+    grant_type = fields.get("grant_type")
     client_id = fields.get("client_id", "")
-    code = fields.get("code", "")
-    redirect_uri = fields.get("redirect_uri", "")
-    resource = fields.get("resource", "")
-    verifier = fields.get("code_verifier", "")
-    if (
-        not client_id
-        or len(client_id) > 2048
-        or not code
-        or len(code) > 256
-        or not _allowed_redirect_uri(redirect_uri)
-        or not _allowed_resource(resource)
-        or not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", verifier)
-    ):
+    if not client_id or len(client_id) > 2048:
         return JSONResponse({"error": "invalid_grant"}, status_code=400)
-    challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
+
     _ensure_tables()
     with _db() as connection, connection.cursor() as cursor:
-        cursor.execute(
-            """DELETE FROM shah_oauth_codes
-                WHERE code_hash=%s AND client_id=%s AND redirect_uri=%s
-                  AND code_challenge=%s AND resource=%s AND expires_at>NOW()
-                RETURNING email, resource, scope""",
-            (_digest(code), client_id, redirect_uri, challenge, resource),
-        )
-        row = cursor.fetchone()
-        if not row:
-            return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        if grant_type == "authorization_code":
+            code = fields.get("code", "")
+            redirect_uri = fields.get("redirect_uri", "")
+            resource = fields.get("resource", "")
+            verifier = fields.get("code_verifier", "")
+            if (
+                not code
+                or len(code) > 256
+                or not _allowed_redirect_uri(redirect_uri)
+                or not _allowed_resource(resource)
+                or not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", verifier)
+            ):
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+            challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
+            cursor.execute(
+                """DELETE FROM shah_oauth_codes
+                    WHERE code_hash=%s AND client_id=%s AND redirect_uri=%s
+                      AND code_challenge=%s AND resource=%s AND expires_at>NOW()
+                    RETURNING email, resource, scope""",
+                (_digest(code), client_id, redirect_uri, challenge, resource),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+            email, resource, scope = row
+        elif grant_type == "refresh_token":
+            old_refresh_token = fields.get("refresh_token", "")
+            requested_resource = fields.get("resource")
+            if (
+                not old_refresh_token
+                or len(old_refresh_token) > 512
+                or (requested_resource and not _allowed_resource(requested_resource))
+            ):
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+            cursor.execute(
+                """SELECT email, resource, scope FROM shah_oauth_refresh_tokens
+                    WHERE token_hash=%s AND client_id=%s AND expires_at>NOW()
+                    FOR UPDATE""",
+                (_digest(old_refresh_token), client_id),
+            )
+            row = cursor.fetchone()
+            if not row or (requested_resource and requested_resource != row[1]):
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+            scope = _normalize_scope(fields.get("scope", row[2]), allowed=set(str(row[2]).split()))
+            if scope is None:
+                return JSONResponse({"error": "invalid_scope"}, status_code=400)
+            cursor.execute(
+                """DELETE FROM shah_oauth_refresh_tokens
+                    WHERE token_hash=%s AND client_id=%s AND expires_at>NOW()
+                    RETURNING email, resource, scope""",
+                (_digest(old_refresh_token), client_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+            email, resource = row[0], row[1]
+        else:
+            return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
+
         access_token = secrets.token_urlsafe(48)
         cursor.execute(
             """INSERT INTO shah_oauth_access_tokens
@@ -634,19 +704,37 @@ async def token(request: Request) -> JSONResponse:
             (
                 _digest(access_token),
                 client_id,
-                row[0],
-                row[1],
-                row[2],
+                email,
+                resource,
+                scope,
                 datetime.now(UTC) + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS),
             ),
         )
-    return JSONResponse(
-        {
+        payload = {
             "access_token": access_token,
             "token_type": "Bearer",
             "expires_in": ACCESS_TOKEN_TTL_SECONDS,
-            "scope": row[2],
-        },
+            "scope": scope,
+        }
+        if OFFLINE_ACCESS_SCOPE in scope.split():
+            refresh_token = secrets.token_urlsafe(64)
+            cursor.execute(
+                """INSERT INTO shah_oauth_refresh_tokens
+                    (token_hash, client_id, email, resource, scope, expires_at)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                (
+                    _digest(refresh_token),
+                    client_id,
+                    email,
+                    resource,
+                    scope,
+                    datetime.now(UTC) + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+                ),
+            )
+            payload["refresh_token"] = refresh_token
+
+    return JSONResponse(
+        payload,
         headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
     )
 
@@ -673,3 +761,4 @@ def verify_mcp_access_token(access_token: str) -> str | None:
 
 def bearer_challenge() -> str:
     return f'Bearer resource_metadata="{RESOURCE_METADATA_URL}", scope="{RESEARCH_SCOPE}"'
+

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from tradingagents.service import mcp_oauth
 
@@ -35,6 +36,18 @@ class _FakeCursor:
                 self.database.code = None
         elif "INSERT INTO shah_oauth_access_tokens" in query:
             self.database.access_token = tuple(params)
+        elif "INSERT INTO shah_oauth_refresh_tokens" in query:
+            self.database.refresh_tokens[params[0]] = tuple(params[1:])
+        elif "SELECT email, resource, scope FROM shah_oauth_refresh_tokens" in query:
+            token = self.database.refresh_tokens.get(params[0])
+            self.row = (token[1], token[2], token[3]) if token and token[0] == params[1] else None
+        elif "DELETE FROM shah_oauth_refresh_tokens" in query:
+            token = self.database.refresh_tokens.get(params[0])
+            if token and token[0] == params[1]:
+                self.row = (token[1], token[2], token[3])
+                self.database.refresh_tokens.pop(params[0])
+            else:
+                self.row = None
         elif "INSERT INTO shah_oauth_clients" in query:
             self.database.clients[params[0]] = list(params[1])
         elif "SELECT redirect_uris FROM shah_oauth_clients" in query:
@@ -76,6 +89,7 @@ class _FakeDatabase:
     def __init__(self):
         self.code = None
         self.access_token = None
+        self.refresh_tokens = {}
         self.clients = {}
         self.flows = {}
 
@@ -84,10 +98,26 @@ class _FakeDatabase:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client():
     app = FastAPI()
     app.include_router(mcp_oauth.router)
-    return TestClient(app, follow_redirects=False)
+
+    class _Client:
+        async def _request(self, method, path, **kwargs):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://testserver",
+                follow_redirects=False,
+            ) as async_client:
+                return await async_client.request(method, path, **kwargs)
+
+        def get(self, path, **kwargs):
+            return asyncio.run(self._request("GET", path, **kwargs))
+
+        def post(self, path, **kwargs):
+            return asyncio.run(self._request("POST", path, **kwargs))
+
+    return _Client()
 
 
 def test_discovery_metadata_advertises_supported_oauth_contract(client):
@@ -104,6 +134,11 @@ def test_discovery_metadata_advertises_supported_oauth_contract(client):
     assert server.json()["client_id_metadata_document_supported"] is True
     assert "S256" in server.json()["code_challenge_methods_supported"]
     assert server.json()["token_endpoint_auth_methods_supported"] == ["none"]
+    assert server.json()["grant_types_supported"] == ["authorization_code", "refresh_token"]
+    assert server.json()["scopes_supported"] == [
+        mcp_oauth.RESEARCH_SCOPE,
+        mcp_oauth.OFFLINE_ACCESS_SCOPE,
+    ]
 
 
 @pytest.mark.parametrize(
@@ -163,12 +198,17 @@ def test_dynamic_client_registration_only_accepts_chatgpt_callbacks(client, monk
 
     accepted = client.post(
         "/oauth/register",
-        json={"redirect_uris": [CHATGPT_CALLBACK], "token_endpoint_auth_method": "none"},
+        json={
+            "redirect_uris": [CHATGPT_CALLBACK],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+        },
     )
     assert accepted.status_code == 201
     client_id = accepted.json()["client_id"]
     assert client_id.startswith("shah-dcr-")
     assert accepted.json()["token_endpoint_auth_method"] == "none"
+    assert accepted.json()["grant_types"] == ["authorization_code", "refresh_token"]
     assert mcp_oauth._client_redirects(client_id) == [CHATGPT_CALLBACK]
 
 
@@ -192,7 +232,7 @@ def test_authorization_code_flow_uses_invite_identity_and_pkce(client, monkeypat
             "code_challenge": CHALLENGE,
             "code_challenge_method": "S256",
             "resource": mcp_oauth.MCP_RESOURCE,
-            "scope": mcp_oauth.RESEARCH_SCOPE,
+            "scope": f"{mcp_oauth.RESEARCH_SCOPE} {mcp_oauth.OFFLINE_ACCESS_SCOPE}",
         },
     )
     assert authorization.status_code == 200
@@ -222,7 +262,10 @@ def test_authorization_code_flow_uses_invite_identity_and_pkce(client, monkeypat
         },
     )
     assert exchanged.status_code == 200
-    assert exchanged.json()["scope"] == mcp_oauth.RESEARCH_SCOPE
+    assert exchanged.json()["scope"] == (
+        f"{mcp_oauth.RESEARCH_SCOPE} {mcp_oauth.OFFLINE_ACCESS_SCOPE}"
+    )
+    assert exchanged.json()["refresh_token"]
     assert database.access_token[2] == "invitee@example.com"
 
 
@@ -305,3 +348,76 @@ def test_token_verification_checks_scope_and_resource(monkeypatch):
     assert mcp_oauth.verify_mcp_access_token("opaque-token") is None
     database.token_row = ("invitee@example.com", mcp_oauth.MCP_RESOURCE, "profile")
     assert mcp_oauth.verify_mcp_access_token("opaque-token") is None
+
+
+def test_offline_access_issues_rotating_refresh_tokens(client, monkeypatch):
+    database = _FakeDatabase()
+    monkeypatch.setattr(mcp_oauth, "_ensure_tables", lambda: None)
+    monkeypatch.setattr(mcp_oauth, "_db", database.connect)
+    registered = client.post(
+        "/oauth/register",
+        json={"redirect_uris": [CHATGPT_CALLBACK], "grant_types": ["authorization_code"]},
+    )
+    client_id = registered.json()["client_id"]
+    database.code = (
+        (
+            mcp_oauth._digest("one-time-code"),
+            client_id,
+            CHATGPT_CALLBACK,
+            CHALLENGE,
+            mcp_oauth.MCP_RESOURCE,
+        ),
+        (
+            "invitee@example.com",
+            mcp_oauth.MCP_RESOURCE,
+            f"{mcp_oauth.RESEARCH_SCOPE} {mcp_oauth.OFFLINE_ACCESS_SCOPE}",
+        ),
+    )
+
+    exchanged = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "code": "one-time-code",
+            "redirect_uri": CHATGPT_CALLBACK,
+            "resource": mcp_oauth.MCP_RESOURCE,
+            "code_verifier": VERIFIER,
+        },
+    )
+    first = exchanged.json()
+    assert exchanged.status_code == 200
+    assert first["scope"] == f"{mcp_oauth.RESEARCH_SCOPE} {mcp_oauth.OFFLINE_ACCESS_SCOPE}"
+    assert first["refresh_token"]
+    first_refresh_hash = mcp_oauth._digest(first["refresh_token"])
+    assert first_refresh_hash in database.refresh_tokens
+
+    refreshed = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "refresh_token": first["refresh_token"],
+            "resource": mcp_oauth.MCP_RESOURCE,
+        },
+    )
+    second = refreshed.json()
+    assert refreshed.status_code == 200
+    assert second["access_token"] != first["access_token"]
+    assert second["refresh_token"] != first["refresh_token"]
+    assert first_refresh_hash not in database.refresh_tokens
+    second_refresh_hash = mcp_oauth._digest(second["refresh_token"])
+    assert second_refresh_hash in database.refresh_tokens
+
+    reused = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "refresh_token": first["refresh_token"],
+            "resource": mcp_oauth.MCP_RESOURCE,
+        },
+    )
+    assert reused.status_code == 400
+    assert reused.json()["error"] == "invalid_grant"
+
