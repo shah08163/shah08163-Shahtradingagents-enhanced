@@ -1,0 +1,21 @@
+name: Traceability checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  traceability:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate traceability standard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s DEVELOPMENT_TRACEABILITY.md
+          grep -q "Post-deployment verification" DEVELOPMENT_TRACEABILITY.md
+          grep -q "rollback_to:" DEVELOPMENT_TRACEABILITY.md
+          grep -q "deployed_commit:" DEVELOPMENT_TRACEABILITY.md
+          echo "Traceability documentation and release template present"
