@@ -39,4 +39,3 @@ For each candidate report thesis/direction, trigger status and evidence, structu
 Compare these research scenarios; do not enforce them as stops:
 - Long calls/puts: profit outcomes at +50% and +100% of debit; loss outcome at −50% of debit; thesis invalidation; review at 21 DTE.
 - Debit spreads: 50% and 75% of maximum profit; loss equal to 50% of maximum risk; thesis invalidation; review at 21 DTE.
-::
