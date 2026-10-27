@@ -1,13 +1,12 @@
-import pathlib
-import sys
 import unittest
-sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
-import universe_screen as u
+
+from long_premium import universe_screen as u
+
 
 class UniverseScreenTests(unittest.TestCase):
     def test_eligible(self):
-        base = dict(symbol="ABC", name="Example Manufacturing, Inc.", status="active",
-                    tradable=True, attributes=["has_options"])
+        base = {"symbol": "ABC", "name": "Example Manufacturing, Inc.", "status": "active",
+                "exchange": "NYSE", "tradable": True, "attributes": ["has_options"]}
         self.assertTrue(u.eligible(base))
         self.assertFalse(u.eligible({**base,"attributes":[]}))
         self.assertTrue(u.eligible({**base,"name":"Example Index ETF"}))

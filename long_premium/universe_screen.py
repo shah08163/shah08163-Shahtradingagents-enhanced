@@ -27,6 +27,7 @@ DATA = "https://data.alpaca.markets"
 BROKER = "https://api.alpaca.markets"
 EXCLUDE = re.compile(r"\b(ETN|EXCHANGE TRADED NOTE|WARRANT|RIGHTS?|UNITS?|SPAC|BLANK CHECK|ACQUISITION CORP(?:ORATION)?|ACQUISITION COMPANY)\b", re.I)
 SUFFIX = re.compile(r"(\.WS|\.W|\.U|\.UN|\.R|\.RT)$", re.I)
+US_LISTED_EXCHANGES = {"NYSE", "NASDAQ", "AMEX", "ARCA", "BATS", "NYSEARCA", "IEX", "NYSE MKT"}
 
 class ApiError(Exception):
     pass
@@ -59,14 +60,12 @@ def chunks(items, size):
         yield i // size, items[i:i+size]
 
 def eligible(asset):
-    if asset.get("exchange") in ("OTC", "CRYPTO") or asset.get("status") != "active" or not asset.get("tradable"):
+    if (asset.get("exchange") or "").upper() not in US_LISTED_EXCHANGES or asset.get("status") != "active" or not asset.get("tradable"):
         return False
     if "has_options" not in asset.get("attributes", []):
         return False
     name, symbol = asset.get("name", ""), asset.get("symbol", "")
-    if not symbol or EXCLUDE.search(name) or SUFFIX.search(symbol):
-        return False
-    return True
+    return bool(symbol) and not EXCLUDE.search(name) and not SUFFIX.search(symbol)
 
 def get_universe():
     # Direct REST avoids connector Pydantic validation failures on new exchange codes.
@@ -122,6 +121,11 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
         universe=universe[:limit]
     atomic_json(out/"universe.json", {"created_utc":start, "symbols":universe, "counts":counts})
     audit={"started_utc":start, "universe_size":len(universe), "counts":counts,
+           "source_health":{"screening_source":"alpaca_iex","screening_source_role":"preselection_only",
+             "screening_source_consolidated":False,"hard_gates_passed":False,
+             "primary_fallback_order":["schwab_cloudflare","alpaca_sip"],
+             "contingency_source":"schwab_northflank","contingency_enabled":False,
+             "market_options_provider_adapters":"not_configured_in_manual_workflow"},
            "selection":{"min_price":min_price,"min_iex_day_volume":min_iex_volume,
                         "min_iex_adv20_proxy":min_iex_adv20,"min_iex_dollar_adv20_proxy":min_iex_dollar_adv20,
                         "required_consolidated_adv20":1000000,"required_consolidated_dollar_adv20":100000000},
@@ -170,7 +174,8 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
                 if token:
                     query["page_token"]=token
                 page=request_json(DATA,"/v2/stocks/bars",query)
-                for ticker, recs in page.get("bars",{}).items(): batch_data.setdefault(ticker,[]).extend(recs)
+                for ticker, recs in page.get("bars",{}).items():
+                    batch_data.setdefault(ticker,[]).extend(recs)
                 token=page.get("next_page_token")
                 if not token:
                     break

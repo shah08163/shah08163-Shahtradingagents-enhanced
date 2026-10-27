@@ -1,7 +1,32 @@
 # Shah Quant Long Premium — auditable universe layer
 
-This is an **isolated, read-only stock-screening module** for the v2.1 engine.
-It does not alter the current trading agents, place orders, access Schwab OAuth, or deploy Workers.
+This is an **isolated, read-only screening module** for the v2.1 engine.
+It does not alter the current trading agents, place orders, access or change OAuth credentials, or deploy Workers.
+
+## Source health and fallback
+
+`source_health.py` defines the fail-closed runtime contract for market and option data:
+
+1. Schwab Cloudflare is primary.
+2. Alpaca SIP is the automatic secondary.
+3. Schwab Northflank is a contingency and is excluded unless the caller explicitly enables it.
+4. Bullflow GEX and VEX are separately validated flow evidence; they do not replace quote or option-chain sources.
+
+Every attempted source records its name, provider and retrieval timestamps, delay status,
+consolidation status, quote and option-contract coverage counts, and rejection reasons. A
+source is eligible only when it is real-time, consolidated, fresh, and complete for the
+requested coverage. IEX is marked
+preselection-only and can never satisfy those market-data gates. The $20 price, consolidated
+20-session volume, option open-interest, contract-volume, and spread checks fail closed when
+any value is absent. Trade readiness also requires fresh Bullflow GEX and VEX rows.
+Northflank does not enter the fallback sequence by default.
+
+The source-health module accepts provider callables from the runtime that owns the connected
+authorizations. The manual GitHub Actions workflow has no Schwab/Bullflow adapter credentials
+and does not access the user's connections; its existing Alpaca IEX output remains a
+preselection artifact. It now labels itself explicitly as non-consolidated and uncertified.
+The live connected-adapter wiring remains a separate integration requirement; this PR does
+not copy, rotate, or request any OAuth token or secret.
 
 ## Workflow
 Run GitHub Actions **Long Premium Universe Screen (manual)**.
@@ -17,7 +42,7 @@ No trading secrets need to be changed.
 
 ## Validation boundaries
 
-Universe source: current active Alpaca U.S. equities with \`has_options\` attribute.
+Universe source: current active Alpaca U.S. equities with \`has_options\` attribute, filtered to recognized U.S. listed exchanges.
 Stocks and ETFs are included; name/symbol-based removal of warrants, SPACs and units is **heuristic**.
 Review edge cases before certifying instrument eligibility. Some exclusion categories cannot be verified
 definitively from Alpaca metadata alone. No claim is made that a symbol with \`has_options\` has liquid spreads.
