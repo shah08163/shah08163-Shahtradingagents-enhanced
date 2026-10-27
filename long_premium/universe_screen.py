@@ -7,6 +7,7 @@ A completed stock-level screen is NOT certification of Schwab option-chain,
 Bullflow, catalyst, entry, portfolio-fit or execution gates.
 """
 from __future__ import annotations
+
 import argparse
 import csv
 import datetime as dt
@@ -88,7 +89,8 @@ def technical(bars):
     moves = [math.log(closes[i] / closes[i-1]) for i in range(1, len(closes)) if closes[i] > 0 and closes[i-1] > 0]
     def rv(n):
         x = moves[-n:]
-        if len(x) < n: return None
+        if len(x) < n:
+            return None
         mu = sum(x) / n
         return math.sqrt(sum((v-mu)**2 for v in x)/(n-1))*math.sqrt(252)*100
     diffs = [closes[i] - closes[i-1] for i in range(len(closes)-14, len(closes))]
@@ -113,10 +115,11 @@ def write_csv(path, rows):
 
 def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, min_iex_dollar_adv20=2500000):
     out.mkdir(parents=True, exist_ok=True)
-    start=dt.datetime.now(dt.timezone.utc).isoformat()
+    start=dt.datetime.now(dt.UTC).isoformat()
     assets, counts = get_universe()
     universe=sorted(assets)
-    if limit is not None: universe=universe[:limit]
+    if limit is not None:
+        universe=universe[:limit]
     atomic_json(out/"universe.json", {"created_utc":start, "symbols":universe, "counts":counts})
     audit={"started_utc":start, "universe_size":len(universe), "counts":counts,
            "selection":{"min_price":min_price,"min_iex_day_volume":min_iex_volume,
@@ -133,7 +136,8 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
             snapshots.update(response)
         except ApiError as exc:
             audit["snapshot_batch_failures"].append({"batch":number,"symbols":batch,"error":str(exc)})
-        if number%10==0: atomic_json(out/"audit.json",audit)
+        if number%10==0:
+            atomic_json(out/"audit.json",audit)
         time.sleep(.3)
     audit["snapshot_success"]=sum(s in snapshots for s in universe)
     audit["snapshot_missing"]=[s for s in universe if s not in snapshots]
@@ -144,12 +148,14 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
         previous=z.get("prevDailyBar") or {}
         price=(z.get("latestTrade") or {}).get("p")
         vol=current.get("v")
-        if not price or not vol or not previous.get("c") or not current.get("c"): continue
-        if price<min_price or vol<min_iex_volume: continue
+        if not price or not vol or not previous.get("c") or not current.get("c"):
+            continue
+        if price<min_price or vol<min_iex_volume:
+            continue
         prelim.append((symbol, float(price), int(vol), (current["c"]/previous["c"]-1)*100))
     audit["prelim_count"]=len(prelim)
     bars={}
-    now=dt.datetime.now(dt.timezone.utc)
+    now=dt.datetime.now(dt.UTC)
     start_day=(now-dt.timedelta(days=115)).date().isoformat()
     end_day=(now+dt.timedelta(days=1)).date().isoformat()
     # Alpaca multi-symbol bars are paginated; continue until every page is consumed.
@@ -161,17 +167,21 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
             while True:
                 query={"symbols":",".join(batch),"timeframe":"1Day","start":start_day,
                        "end":end_day,"limit":10000,"feed":"iex","adjustment":"split"}
-                if token: query["page_token"]=token
+                if token:
+                    query["page_token"]=token
                 page=request_json(DATA,"/v2/stocks/bars",query)
                 for ticker, recs in page.get("bars",{}).items(): batch_data.setdefault(ticker,[]).extend(recs)
                 token=page.get("next_page_token")
-                if not token: break
-                if token in seen: raise ApiError("repeated pagination token")
+                if not token:
+                    break
+                if token in seen:
+                    raise ApiError("repeated pagination token")
                 seen.add(token)
             bars.update(batch_data)
         except ApiError as exc:
             audit["history_batch_failures"].append({"batch":number,"symbols":batch,"error":str(exc)})
-        if number%10==0: atomic_json(out/"audit.json",audit)
+        if number%10==0:
+            atomic_json(out/"audit.json",audit)
         time.sleep(.3)
     result=[]
     audit["history_below_iex_liquidity_proxy"] = 0
@@ -193,7 +203,8 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
         strong_down=price<t["sma20"] and price<t["sma50"] and 25<=t["rsi14"]<=55
         bias="BULLISH_WATCH" if strong_up else "BEARISH_WATCH" if strong_down else "REJECT"
         # No market-wide option-chain claim; separate handoff.
-        if bias=="REJECT": continue
+        if bias=="REJECT":
+            continue
         row={"symbol":symbol,"exchange":assets[symbol].get("exchange"),
              "name":assets[symbol].get("name"),"price":round(price,4),
              "iex_day_volume":vol,"iex_adv20":round(iex_adv20),
@@ -205,7 +216,7 @@ def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, mi
     write_csv(out/"technical_screen.csv",result)
     audit["screened"]=audit["history_success"]
     audit["survivors"]=len(result)
-    audit["finished_utc"]=dt.datetime.now(dt.timezone.utc).isoformat()
+    audit["finished_utc"]=dt.datetime.now(dt.UTC).isoformat()
     audit["status"]="UNIVERSE_SCREEN_COMPLETE" if (
         len(audit["snapshot_missing"])==0 and not audit["snapshot_batch_failures"]
         and not audit["history_batch_failures"]
