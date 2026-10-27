@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 DATA = "https://data.alpaca.markets"
 BROKER = "https://api.alpaca.markets"
-EXCLUDE = re.compile(r"\b(ETF|ETN|EXCHANGE TRADED|FUND|TRUST|WARRANT|RIGHTS?|UNITS?|SPAC|BLANK CHECK|ACQUISITION CORP(?:ORATION)?|ACQUISITION COMPANY)\b", re.I)
+EXCLUDE = re.compile(r"\b(ETN|EXCHANGE TRADED NOTE|WARRANT|RIGHTS?|UNITS?|SPAC|BLANK CHECK|ACQUISITION CORP(?:ORATION)?|ACQUISITION COMPANY)\b", re.I)
 SUFFIX = re.compile(r"(\.WS|\.W|\.U|\.UN|\.R|\.RT)$", re.I)
 
 class ApiError(Exception):
