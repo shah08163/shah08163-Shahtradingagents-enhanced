@@ -47,3 +47,20 @@ validated long-premium option trade.
 
 This implementation is purposefully a **pull-request-only foundation**. The GitHub workflow
 is manual; no production deployment, secrets, Schwab OAuth or existing schedules are modified.
+
+## Highly liquid stock mandate (October 27 update)
+
+The **production hard gate** is at least 1,000,000 **consolidated** average daily shares
+AND $100,000,000 consolidated average daily dollar volume over 20 sessions, stock
+price >= $20, and liquid option legs (>= 500 OI and >= 50 current-session contracts
+per leg; prefer leg bid/ask <=5% of mid; combined spread slippage <=10%, prefer <=5%).
+These consolidated-volume/option-chain criteria are **not yet implemented or certified**
+by the free IEX-only stock screener. The implemented early-rejection proxy instead
+requires >=25,000 IEX average daily shares AND >=$2,500,000 IEX average daily dollar
+volume across 20 completed sessions; these are **preselection heuristics, not substitutes**
+for the stricter consolidated liquidity hard gates. Missing/insufficient records never
+count as qualifying or passed, and audit continues to report partial completion.
+
+After shortlist generation, use verified consolidated market volume and the Schwab
+Cloudflare option chain to enforce production hard gates before any trade is marked ARMED
+or TRIGGERED. Keep special cases where split/adjusted bars are inconsistent under review.
