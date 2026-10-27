@@ -103,7 +103,7 @@ def technical(bars):
             "bars":len(complete),"history_asof":complete[-1]["t"]}
 
 def write_csv(path, rows):
-    fields = ["symbol","exchange","name","price","iex_day_volume","change_pct","prev_close",
+    fields = ["symbol","exchange","name","price","iex_day_volume","iex_adv20","iex_dollar_adv20","change_pct","prev_close",
               "sma20","sma50","rsi14","atr14","rv5","rv10","rv20","history_asof",
               "bias","reason"]
     with path.open("w", newline="", encoding="utf-8") as fh:
@@ -111,7 +111,7 @@ def write_csv(path, rows):
         writer.writeheader()
         writer.writerows(rows)
 
-def run(out, limit=None, min_price=10, min_iex_volume=1000):
+def run(out, limit=None, min_price=20, min_iex_volume=0, min_iex_adv20=25000, min_iex_dollar_adv20=2500000):
     out.mkdir(parents=True, exist_ok=True)
     start=dt.datetime.now(dt.timezone.utc).isoformat()
     assets, counts = get_universe()
@@ -119,7 +119,9 @@ def run(out, limit=None, min_price=10, min_iex_volume=1000):
     if limit is not None: universe=universe[:limit]
     atomic_json(out/"universe.json", {"created_utc":start, "symbols":universe, "counts":counts})
     audit={"started_utc":start, "universe_size":len(universe), "counts":counts,
-           "selection":{"min_price":min_price,"min_iex_volume":min_iex_volume},
+           "selection":{"min_price":min_price,"min_iex_day_volume":min_iex_volume,
+                        "min_iex_adv20_proxy":min_iex_adv20,"min_iex_dollar_adv20_proxy":min_iex_dollar_adv20,
+                        "required_consolidated_adv20":1000000,"required_consolidated_dollar_adv20":100000000},
            "snapshot_success":0,"snapshot_missing":[],"snapshot_batch_failures":[],
            "history_success":0,"history_insufficient":[],"history_batch_failures":[],
            "screened":0,"survivors":0,"status":"RUNNING"}
@@ -172,12 +174,21 @@ def run(out, limit=None, min_price=10, min_iex_volume=1000):
         if number%10==0: atomic_json(out/"audit.json",audit)
         time.sleep(.3)
     result=[]
+    audit["history_below_iex_liquidity_proxy"] = 0
     for symbol,price,vol,pct in prelim:
         t=technical(bars.get(symbol,[]))
         if not t:
             audit["history_insufficient"].append(symbol)
             continue
         audit["history_success"]+=1
+        completed = [b for b in sorted(bars.get(symbol,[]), key=lambda r: r["t"])
+                     if b["t"][:10] <= t["history_asof"][:10]]
+        last20 = completed[-20:]
+        iex_adv20 = sum(float(b["v"]) for b in last20) / 20
+        iex_dollar_adv20 = sum(float(b["v"])*float(b["c"]) for b in last20) / 20
+        if iex_adv20 < min_iex_adv20 or iex_dollar_adv20 < min_iex_dollar_adv20:
+            audit["history_below_iex_liquidity_proxy"] += 1
+            continue
         strong_up=price>t["sma20"] and price>t["sma50"] and 45<=t["rsi14"]<=75
         strong_down=price<t["sma20"] and price<t["sma50"] and 25<=t["rsi14"]<=55
         bias="BULLISH_WATCH" if strong_up else "BEARISH_WATCH" if strong_down else "REJECT"
@@ -185,7 +196,9 @@ def run(out, limit=None, min_price=10, min_iex_volume=1000):
         if bias=="REJECT": continue
         row={"symbol":symbol,"exchange":assets[symbol].get("exchange"),
              "name":assets[symbol].get("name"),"price":round(price,4),
-             "iex_day_volume":vol,"change_pct":round(pct,2),**t,
+             "iex_day_volume":vol,"iex_adv20":round(iex_adv20),
+             "iex_dollar_adv20":round(iex_dollar_adv20),
+             "change_pct":round(pct,2),**t,
              "bias":bias,"reason":"Daily trend/RSI preliminary; options/catalysts/flow not checked"}
         result.append(row)
     result.sort(key=lambda z:(z["bias"],-z["iex_day_volume"]))
@@ -198,6 +211,7 @@ def run(out, limit=None, min_price=10, min_iex_volume=1000):
         and not audit["history_batch_failures"]
         and not audit["history_insufficient"] and limit is None
         ) else "PARTIAL_UNIVERSE_SCREEN"
+    audit["consolidated_liquidity_verified"]=False
     audit["full_engine_certified"]=False
     audit["remaining_gates"]=["corporate actions and earnings","Schwab 20-60 DTE contract liquidity",
       "IV/RV and structure","Bullflow first-candidate institutional analysis",
@@ -213,7 +227,9 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("--out",type=pathlib.Path,default=pathlib.Path("long-premium-output"))
     parser.add_argument("--limit",type=int,default=None,help="SMOKE TEST ONLY; partial certification")
-    parser.add_argument("--min-price",type=float,default=10)
-    parser.add_argument("--min-iex-volume",type=int,default=1000)
+    parser.add_argument("--min-price",type=float,default=20)
+    parser.add_argument("--min-iex-volume",type=int,default=0)
+    parser.add_argument("--min-iex-adv20",type=int,default=25000)
+    parser.add_argument("--min-iex-dollar-adv20",type=int,default=2500000)
     args=parser.parse_args()
-    run(args.out,args.limit,args.min_price,args.min_iex_volume)
+    run(args.out,args.limit,args.min_price,args.min_iex_volume,args.min_iex_adv20,args.min_iex_dollar_adv20)
