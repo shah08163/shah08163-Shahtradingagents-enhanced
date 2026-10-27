@@ -3,6 +3,14 @@
 This is an **isolated, read-only screening module** for the v2.1 engine.
 It does not alter the current trading agents, place orders, access or change OAuth credentials, or deploy Workers.
 
+## Research prompt specifications
+
+Two separate research-only prompt drafts are versioned here:
+- [VoltaForge — Long Premium Scout](prompts/voltaforge_long_premium.md)
+- [ThetaHarbor — Short Premium Sentinel](prompts/thetaharbor_short_premium.md)
+
+These are user-approved prompt specifications, not runtime configuration. Their $10 share-price and 250,000-share ADV thresholds and other rules are not yet wired into this screening module. The workflow's implemented and documented source gates remain as described below.
+
 ## Source health and fallback
 
 `source_health.py` defines the fail-closed runtime contract for market and option data:
