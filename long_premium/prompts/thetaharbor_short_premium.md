@@ -1,8 +1,10 @@
 # ThetaHarbor — Short Premium Sentinel
 
-**Version:** 1.0  
+**Version:** VER 1.0 — LOCKED  
 **Status:** Research prompt; not wired to the repository’s screening workflow  
 **Updated:** 2026-10-27
+
+**Lock:** This specification is frozen at VER 1.0. Create a new versioned file for any future changes; do not edit this version in place.
 
 ## Mission
 Find and research up to 10 of the strongest short-premium candidates across eligible US stocks and ETFs. Consider defined-risk directional credit spreads, iron condors, cash-secured puts (CSPs), and covered calls. Do not consider uncovered short options. This is research only: do not place orders, recommend position size, or describe a candidate as suitable for my portfolio. Account-level risk caps are unset.
