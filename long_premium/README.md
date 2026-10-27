@@ -18,7 +18,7 @@ No trading secrets need to be changed.
 ## Validation boundaries
 
 Universe source: current active Alpaca U.S. equities with \`has_options\` attribute.
-Name/symbol-based removal of obvious ETFs, funds, warrants, SPACs and units is **heuristic**.
+Stocks and ETFs are included; name/symbol-based removal of warrants, SPACs and units is **heuristic**.
 Review edge cases before certifying instrument eligibility. Some exclusion categories cannot be verified
 definitively from Alpaca metadata alone. No claim is made that a symbol with \`has_options\` has liquid spreads.
 
@@ -50,7 +50,7 @@ is manual; no production deployment, secrets, Schwab OAuth or existing schedules
 
 ## Highly liquid stock mandate (October 27 update)
 
-The **production hard gate** is at least 1,000,000 **consolidated** average daily shares
+For both optionable stocks and ETFs, the **production hard gate** is at least 1,000,000 **consolidated** average daily shares
 AND $100,000,000 consolidated average daily dollar volume over 20 sessions, stock
 price >= $20, and liquid option legs (>= 500 OI and >= 50 current-session contracts
 per leg; prefer leg bid/ask <=5% of mid; combined spread slippage <=10%, prefer <=5%).
@@ -64,3 +64,7 @@ count as qualifying or passed, and audit continues to report partial completion.
 After shortlist generation, use verified consolidated market volume and the Schwab
 Cloudflare option chain to enforce production hard gates before any trade is marked ARMED
 or TRIGGERED. Keep special cases where split/adjusted bars are inconsistent under review.
+
+## ETFs included
+
+Eligible optionable ETFs (broad-market, sector, industry, thematic, commodity and leveraged/inverse ETFs) are included when they pass underlying and option-chain liquidity gates. ETF-specific suitability, leverage decay, corporate action/issuer structure and settlement/contract deliverables must be checked downstream. No ETF inclusion bypasses option-leg OI/volume/spread or catalyst/entry requirements. Exclude ETNs unless separately approved, because their issuer-credit and structural risks differ.
