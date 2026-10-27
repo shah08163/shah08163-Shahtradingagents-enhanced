@@ -5,11 +5,11 @@ It does not alter the current trading agents, place orders, access or change OAu
 
 ## Research prompt specifications
 
-Two separate research-only prompt drafts are versioned here:
+Two separate research-only prompts are locked at VER 1.0:
 - [VoltaForge — Long Premium Scout](prompts/voltaforge_long_premium.md)
 - [ThetaHarbor — Short Premium Sentinel](prompts/thetaharbor_short_premium.md)
 
-These are user-approved prompt specifications, not runtime configuration. Their $10 share-price and 250,000-share ADV thresholds and other rules are not yet wired into this screening module. The workflow's implemented and documented source gates remain as described below.
+These are user-approved, version-locked prompt specifications, not runtime configuration. Future revisions must use new versioned files; VER 1.0 stays unchanged. Their $10 share-price and 250,000-share ADV thresholds and other rules are not yet wired into this screening module. The workflow's implemented and documented source gates remain as described below.
 
 ## Source health and fallback
 
