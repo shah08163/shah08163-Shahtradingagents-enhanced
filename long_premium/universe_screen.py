@@ -20,6 +20,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from zoneinfo import ZoneInfo
 
 DATA = "https://data.alpaca.markets"
 BROKER = "https://api.alpaca.markets"
@@ -57,7 +58,7 @@ def chunks(items, size):
         yield i // size, items[i:i+size]
 
 def eligible(asset):
-    if asset.get("status") != "active" or not asset.get("tradable"):
+    if asset.get("exchange") in ("OTC", "CRYPTO") or asset.get("status") != "active" or not asset.get("tradable"):
         return False
     if "has_options" not in asset.get("attributes", []):
         return False
@@ -76,7 +77,7 @@ def get_universe():
 def technical(bars):
     # Indicator values use only full, completed DAILY sessions: exclude today's partial candle.
     sorted_bars = sorted(bars, key=lambda v: v["t"])
-    today = dt.datetime.now(dt.timezone.utc).astimezone(dt.timezone(dt.timedelta(hours=-4))).date().isoformat()
+    today = dt.datetime.now(ZoneInfo('America/New_York')).date().isoformat()
     complete = [b for b in sorted_bars if b["t"][:10] < today]
     if len(complete) < 51:
         return None
