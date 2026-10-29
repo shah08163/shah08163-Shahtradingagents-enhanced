@@ -20,11 +20,13 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(r["posture"], "NO TRADE")
         self.assertIsNone(r["shah_score"])
     def test_missing_source_downgrades(self):
-        d=example(); d["sources"]=[]
+        d=example()
+        d["sources"]=[]
         r=assemble("GOOGL", SHA, {"market": d})
         self.assertEqual(r["analysts"]["market"]["status"], "PARTIAL")
     def test_invalid_timestamp_downgrades(self):
-        d=example(); d["as_of"]="not-a-date"
+        d=example()
+        d["as_of"]="not-a-date"
         r=assemble("GOOGL", SHA, {"market": d})
         self.assertEqual(r["analysts"]["market"]["status"], "PARTIAL")
 if __name__ == "__main__":
