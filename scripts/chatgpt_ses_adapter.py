@@ -2,10 +2,12 @@
 
 No provider calls or order execution. A missing analyst/metric produces null.
 """
+
 from dataclasses import asdict
 from math import isfinite
-from tradingagents.ses import AnalystEvidence, TradeGate, score_evidence, decide_trade
+
 from scripts.validate_chatgpt_research import ANALYSTS, validate
+from tradingagents.ses import AnalystEvidence, TradeGate, decide_trade, score_evidence
 
 SCORER_BLOB_SHA = "db393dd773f57eaeca3b4f3908b053b0ae3d4aa1"
 
