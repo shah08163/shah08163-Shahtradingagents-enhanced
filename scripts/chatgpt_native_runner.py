@@ -3,10 +3,12 @@
 No external services are called here; the active ChatGPT conversation gathers evidence.
 An analyst is never certified just because an input says 'VERIFIED'.
 """
+
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+
 from scripts.validate_chatgpt_research import ANALYSTS, validate, valid_timestamp
 
 def assemble(ticker, repository_sha, evidence, run_at=None):
@@ -38,7 +40,7 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
         }
     complete = all(r["status"] == "VERIFIED" for r in records.values())
     report = {"ticker": ticker.upper().strip(),
-        "run_at": run_at or datetime.now(timezone.utc).isoformat(),
+        "run_at": run_at or datetime.now(UTC).isoformat(),
         "repository_sha": repository_sha, "analysts": records,
         "complete": complete, "actionable": False, "shah_score": None,
         "scoring_spec_sha": None, "posture": "NO TRADE",
