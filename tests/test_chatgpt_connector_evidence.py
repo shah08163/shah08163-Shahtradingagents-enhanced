@@ -1,9 +1,9 @@
-import unittest
-
 import json
+import unittest
 
 from scripts.chatgpt_connector_evidence import map_connector_data
 from scripts.chatgpt_native_runner import assemble
+
 
 class ConnectorEvidenceTests(unittest.TestCase):
     def test_schwab_quote_maps_without_score(self):
