@@ -19,7 +19,7 @@ COOKIE = "shah_session"
 SESSION_HOURS = 12
 ADMIN_COOKIE = "shah_owner_session"
 ADMIN_SESSION_HOURS = 12
-DAILY_LIMIT = 3
+DAILY_LIMIT = 10
 
 
 def digest(value: str) -> str:
