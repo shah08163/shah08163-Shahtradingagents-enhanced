@@ -17,7 +17,7 @@ router = APIRouter()
 _admin_bearer = HTTPBearer(auto_error=False)
 COOKIE = "shah_session"
 SESSION_HOURS = 12
-DAILY_LIMIT = 3
+DAILY_LIMIT = 10
 
 
 def digest(value: str) -> str:
