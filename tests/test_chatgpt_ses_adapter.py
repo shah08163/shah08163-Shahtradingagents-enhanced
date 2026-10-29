@@ -1,6 +1,7 @@
 import unittest
+
 from scripts.chatgpt_native_runner import assemble
-from scripts.chatgpt_ses_adapter import attach_score, SCORER_BLOB_SHA
+from scripts.chatgpt_ses_adapter import SCORER_BLOB_SHA, attach_score
 from scripts.validate_chatgpt_research import ANALYSTS, validate
 
 SHA="a05eba9a9947959cfdc86f7fe177a24e6844b4a8"
@@ -17,7 +18,8 @@ class AdapterTests(unittest.TestCase):
         self.assertIsNone(r["shah_score"])
         self.assertEqual(r["ses_trade_decision"], "NO_TRADE")
     def test_incomplete_report_fails_closed(self):
-        r=reports();r["complete"]=False
+        r=reports()
+        r["complete"]=False
         self.assertIsNone(attach_score(r, numbers())["shah_score"])
     def test_seven_structured_neutral_scores(self):
         r=attach_score(reports(), numbers())
@@ -32,7 +34,8 @@ class AdapterTests(unittest.TestCase):
         scored=attach_score(report, numbers())
         self.assertIsNone(scored["shah_score"])
     def test_unqualified_direction_rejected(self):
-        n=numbers();n["oi"]["score"]=0.3
+        n=numbers()
+        n["oi"]["score"]=0.3
         self.assertIsNone(attach_score(reports(), n)["shah_score"])
 if __name__=="__main__":
     unittest.main()
