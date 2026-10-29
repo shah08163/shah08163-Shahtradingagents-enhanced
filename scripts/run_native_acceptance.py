@@ -3,9 +3,11 @@
 Never calls a broker, creates an order, or assigns model-generated analyst
 scores. It is intended to run inside GitHub CI and independently in ChatGPT.
 """
+
 import argparse
 import json
 from pathlib import Path
+
 from scripts.chatgpt_native_runner import assemble
 from scripts.chatgpt_ses_adapter import attach_score
 from scripts.validate_chatgpt_research import validate
