@@ -2,6 +2,7 @@ import unittest
 
 from scripts.validate_chatgpt_research import ANALYSTS, validate
 
+
 def sample(status="VERIFIED"):
     return {"ticker":"GOOGL","run_at":"2026-10-29T01:55:00Z","repository_sha":"bd5fddea38c5936b",
             "complete":status=="VERIFIED","actionable":False,"shah_score":None,
