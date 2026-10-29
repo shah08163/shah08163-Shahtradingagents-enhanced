@@ -12,6 +12,7 @@ from scripts.chatgpt_native_runner import assemble
 from scripts.chatgpt_ses_adapter import attach_score
 from scripts.validate_chatgpt_research import validate
 
+
 def run_case(ticker, repository_sha, evidence):
     report = assemble(ticker, repository_sha, evidence)
     result = attach_score(report, numeric_evidence=None)
