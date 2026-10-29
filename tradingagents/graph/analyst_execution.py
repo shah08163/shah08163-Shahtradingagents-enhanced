@@ -18,6 +18,9 @@ class AnalystExecutionPlan:
 
 
 ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
+    "flow": AnalystNodeSpec("flow", "Flow Analyst", "flow_report"),
+    "oi": AnalystNodeSpec("oi", "OI Analyst", "oi_report"),
+    "dealer": AnalystNodeSpec("dealer", "Dealer Analyst", "dealer_report"),
     "market": AnalystNodeSpec(
         key="market",
         agent_node="Market Analyst",

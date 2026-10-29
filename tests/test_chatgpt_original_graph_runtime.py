@@ -19,9 +19,9 @@ class OriginalGraphRuntimeTests(unittest.TestCase):
         self.assertEqual([spec.key for spec in plan.specs], list(keys))
         self.assertTrue(all(spec.report_key for spec in plan.specs))
 
-    def test_nonexistent_dealer_node_rejected(self):
+    def test_nonexistent_node_rejected(self):
         with self.assertRaisesRegex(ValueError, "unknown analyst key"):
-            build_analyst_execution_plan(("market", "dealer"))
+            build_analyst_execution_plan(("market", "unknown"))
 
 
 if __name__ == "__main__":

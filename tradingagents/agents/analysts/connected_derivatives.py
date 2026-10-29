@@ -49,3 +49,20 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
         return {f"{analyst}_report": response.content}
 
     return node
+
+
+def snapshot_evidence_loader(bundle):
+    """Bind already-retrieved ChatGPT connector envelopes without token copying.
+
+    Bundle keys are flow/oi/dealer; envelopes retain raw payload and timestamps.
+    Inputs are copied to prevent a concurrent caller mutating a running graph.
+    """
+    frozen = json.loads(json.dumps(bundle, allow_nan=False))
+    unknown = set(frozen) - set(POLICIES)
+    if unknown:
+        raise ValueError("unknown connected analyst evidence")
+
+    def load(analyst, ticker, trade_date):
+        return json.loads(json.dumps(frozen.get(analyst, [])))
+
+    return load
