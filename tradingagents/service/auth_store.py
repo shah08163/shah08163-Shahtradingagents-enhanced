@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -23,6 +24,7 @@ _RECORD_KEY = "chatgpt-auth"
 _ASSOCIATED_DATA = b"shah-tradingagents:chatgpt-auth:v1"
 _install_lock = threading.Lock()
 _installed = False
+_last_read_status = "NOT_CHECKED"
 
 
 def _encryption_key() -> bytes:
@@ -72,6 +74,8 @@ def _decrypt(payload: bytes) -> dict:
 
 
 def _postgres_read() -> dict:
+    global _last_read_status
+    stage = "STORE_UNAVAILABLE"
     try:
         with _connect() as connection:
             _ensure_table(connection)
@@ -81,11 +85,35 @@ def _postgres_read() -> dict:
                     (_RECORD_KEY,),
                 )
                 row = cursor.fetchone()
-        return _decrypt(bytes(row[0])) if row else {}
+        if not row:
+            _last_read_status = "NO_STORED_SIGN_IN"
+            return {}
+        stage = "STORED_SIGN_IN_UNREADABLE"
+        data = _decrypt(bytes(row[0]))
+        _last_read_status = "READABLE"
+        return data
     except Exception:
-        # Match the upstream file-backed reader's fail-closed behavior: an
-        # unavailable/corrupt store means no usable sign-in, never guessed data.
+        _last_read_status = stage
         return {}
+
+
+def model_auth_status() -> dict:
+    """Credential-free diagnostics; never refresh, revoke or return tokens."""
+    data = chatgpt_auth._read()
+    tokens = data.get("tokens")
+    if not tokens:
+        state = _last_read_status if _installed else "NO_STORED_SIGN_IN"
+        if state == "READABLE":
+            state = "NO_STORED_SIGN_IN"
+        return {"storage": "postgres" if _installed else "file", "state": state}
+    expires = tokens.get("expires_at")
+    if not isinstance(expires, (int, float)):
+        state = "MALFORMED_STORED_SIGN_IN"
+    elif expires <= time.time():
+        state = "EXPIRED_REFRESH_REQUIRED" if tokens.get("refresh_token") else "EXPIRED_REAUTH_REQUIRED"
+    else:
+        state = "PRESENT_NOT_MODEL_VERIFIED"
+    return {"storage": "postgres" if _installed else "file", "state": state}
 
 
 def _postgres_write(data: dict) -> None:

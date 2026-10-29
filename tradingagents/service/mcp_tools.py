@@ -233,8 +233,10 @@ def get_trading_research_result(run_id: str, wait_seconds: int = 15) -> dict:
 def get_tradingagents_status() -> dict:
     """Check whether the TradingAgents MCP integration is configured and which analysts are available."""
     from tradingagents.service.api import ANALYST_ORDER
+    from tradingagents.service.auth_store import model_auth_status
     return {
         "status": "online",
+        "model_auth": model_auth_status(),
         "analysts": ANALYST_ORDER,
         "oi_scope": "Full strikes, up to 60 calendar days to expiration",
         "execution": "Read-only research",
