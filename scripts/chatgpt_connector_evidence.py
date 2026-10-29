@@ -7,6 +7,7 @@ existing Schwab and Bullflow connections. It performs no network calls.
 
 import json
 
+
 def _mapping(payload):
     if isinstance(payload, str):
         payload = json.loads(payload)
