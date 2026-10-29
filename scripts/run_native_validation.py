@@ -11,4 +11,4 @@ TESTS = [
     'tests/test_ses_v1.py',
 ]
 if __name__ == '__main__':
-    raise SystemExit(subprocess.call([sys.executable, '-m', 'pytest', '-v', *TESTS]))
+    raise SystemExit(subprocess.call([sys.executable, '-m', 'pytest', '-v', '--noconftest', *TESTS]))
