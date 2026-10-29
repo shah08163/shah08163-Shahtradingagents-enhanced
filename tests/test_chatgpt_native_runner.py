@@ -1,4 +1,5 @@
 import unittest
+
 from scripts.chatgpt_native_runner import assemble
 from scripts.validate_chatgpt_research import ANALYSTS
 
