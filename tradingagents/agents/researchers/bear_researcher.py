@@ -15,10 +15,18 @@ def create_bear_researcher(llm):
         current_response = opponent_argument_or_opening(
             investment_debate_state.get("current_response", ""), "bull analyst"
         )
-        market_research_report = report_or_absent(state["market_report"], "market")
-        sentiment_report = report_or_absent(state["sentiment_report"], "sentiment")
-        news_report = report_or_absent(state["news_report"], "news")
-        fundamentals_report = report_or_absent(state["fundamentals_report"], "fundamentals")
+        market_research_report = report_or_absent(state.get("market_report", ""), "market")
+        sentiment_report = report_or_absent(state.get("sentiment_report", ""), "sentiment")
+        news_report = report_or_absent(state.get("news_report", ""), "news")
+        fundamentals_report = report_or_absent(state.get("fundamentals_report", ""), "fundamentals")
+        flow_report = report_or_absent(state.get("flow_report", ""), "Bullflow flow")
+        oi_report = report_or_absent(state.get("oi_report", ""), "open interest")
+        dealer_report = report_or_absent(
+            state.get("dealer_positioning_report", ""), "dealer positioning"
+        )
+        evidence_report = report_or_absent(
+            state.get("evidence_report", ""), "confidence-weighted evidence"
+        )
         instrument_context = get_instrument_context_from_state(state)
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
@@ -28,26 +36,28 @@ def create_bear_researcher(llm):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
-        prompt = f"""You are a Bear Analyst making the case against investing in the {target_label}. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively.
+        prompt = f"""You are a Bear Analyst making the case against investing in the {target_label}. Your goal is to present a well-reasoned argument emphasizing risks, challenges, negative indicators, and bearish institutional options positioning where available.
 
 Key points to focus on:
-
-- Risks and Challenges: Highlight factors like market saturation, financial instability, or macroeconomic threats that could hinder the stock's performance.
-- Competitive Weaknesses: Emphasize vulnerabilities such as weaker market positioning, declining innovation, or threats from competitors.
-- Negative Indicators: Use evidence from financial data, market trends, or recent adverse news to support your position.
-- Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning, exposing weaknesses or over-optimistic assumptions.
-- Engagement: Present your argument in a conversational style, directly engaging with the bull analyst's points and debating effectively rather than simply listing facts.
+- Risks and Challenges: Highlight financial, competitive, macro, and execution risks.
+- Negative Indicators: Use financial data, technicals, news, and sentiment where supported.
+- Options Positioning: Use Bullflow directional flow, OI/fresh-positioning evidence, and GEX/VEX dealer-positioning estimates when supplied. Do not treat MULTI trades as directional without leg evidence, do not claim Bullflow represents complete market-wide volume or OI, and do not describe model-derived GEX/VEX as verified dealer inventory.
+- Evidence weighting: Respect the normalized evidence matrix. Low-quality, stale, or low-confidence evidence should carry less argumentative weight. You may disagree with the aggregate score, but if so explain which row deserves different treatment and why.
+- Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning.
 
 Resources available:
-
 {instrument_context}
 Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
 {fundamentals_label}: {fundamentals_report}
+Bullflow institutional options-flow report: {flow_report}
+Bullflow OI / fresh-positioning report: {oi_report}
+Bullflow GEX/VEX dealer-positioning report: {dealer_report}
+Confidence-weighted evidence matrix: {evidence_report}
 Conversation history of the debate: {history}
 Last bull argument: {current_response}
-Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the {target_label}.
+Use this information to deliver a compelling bear argument. Explicitly discuss whether options positioning and dealer-exposure estimates confirm or contradict the fundamental/technical bear thesis when those reports are available.
 """ + get_language_instruction()
 
         response = llm.invoke(prompt)
