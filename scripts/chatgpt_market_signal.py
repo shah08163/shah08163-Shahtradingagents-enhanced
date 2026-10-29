@@ -31,9 +31,9 @@ def assess_market_bars(bars, source_id):
                 or bar.get("completed") is not True):
             return reject
         normalized.append((day, float(close)))
-    if len(set(day for day, _ in normalized)) != len(normalized):
+    if len({day for day, _ in normalized}) != len(normalized):
         return reject
-    if any(a[0] >= b[0] for a, b in zip(normalized, normalized[1:])):
+    if any(a[0] >= b[0] for a, b in zip(normalized, normalized[1:], strict=False)):
         return reject
     close = normalized[-1][1]
     sma20 = sum(value for _, value in normalized[-20:]) / 20
