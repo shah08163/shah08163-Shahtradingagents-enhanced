@@ -4,6 +4,7 @@ This module deliberately produces PARTIAL inputs, not direction scores or a
 certified seven-analyst report. Inputs are saved responses from ChatGPT's
 existing Schwab and Bullflow connections. It performs no network calls.
 """
+
 import json
 
 def _mapping(payload):
