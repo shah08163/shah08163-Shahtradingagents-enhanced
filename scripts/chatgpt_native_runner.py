@@ -9,7 +9,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from scripts.validate_chatgpt_research import ANALYSTS, validate, valid_timestamp
+from scripts.validate_chatgpt_research import ANALYSTS, valid_timestamp, validate
+
 
 def assemble(ticker, repository_sha, evidence, run_at=None):
     if not isinstance(evidence, dict):
