@@ -5,7 +5,7 @@ No provider calls or order execution. A missing analyst/metric produces null.
 from dataclasses import asdict
 from math import isfinite
 from tradingagents.ses import AnalystEvidence, TradeGate, score_evidence, decide_trade
-from scripts.validate_chatgpt_research import ANALYSTS
+from scripts.validate_chatgpt_research import ANALYSTS, validate
 
 SCORER_BLOB_SHA = "db393dd773f57eaeca3b4f3908b053b0ae3d4aa1"
 
@@ -17,7 +17,7 @@ def attach_score(report, numeric_evidence, gates=None):
     result["posture"] = "NO TRADE"
     result["ses_status"] = "INSUFFICIENT"
     result["ses_trade_decision"] = "NO_TRADE"
-    if not report.get("complete") or not isinstance(numeric_evidence, dict):
+    if not report.get("complete") or validate(report) or not isinstance(numeric_evidence, dict):
         return result
     rows = []
     for name in ANALYSTS:
