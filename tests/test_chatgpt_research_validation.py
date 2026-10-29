@@ -13,7 +13,7 @@ class TestEnvelope(unittest.TestCase):
         self.assertEqual(validate(sample()), [])
     def test_missing_analyst(self):
         r=sample()
-         del r["analysts"]["social"]
+        del r["analysts"]["social"]
         self.assertTrue(validate(r))
     def test_false_completion(self):
         r=sample("PARTIAL")
