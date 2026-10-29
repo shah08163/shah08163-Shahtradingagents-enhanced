@@ -24,16 +24,16 @@ def map_connector_data(schwab_quote=None, bullflow_profile=None, schwab_explorer
         data = quote.get("data", {})
         symbol = quote.get("symbol")
         stamp = quote.get("retrieved_at_utc")
-        if symbol and stamp and isinstance(data, dict):
-            regular = data.get("regular", {})
+        if symbol and stamp and isinstance(data, dict) and isinstance(data.get("quote"), dict):
+            regular = data.get("quote", {})
             extended = data.get("extended", {})
             evidence["market"] = {
                 "status": "PARTIAL", "as_of": stamp,
                 "sources": ["Schwab Cloudflare Web quote " + symbol],
                 "evidence": [
-                    "regular_market_last_price=" + str(regular.get("regularMarketLastPrice")),
+                    "previous_close_price=" + str(regular.get("closePrice")),
                     "extended_last_price=" + str(extended.get("lastPrice"))],
-                "limitations": ["Regular and extended prices are distinct sessions; further technical context required"]}
+                "limitations": ["Previous close and extended prices are distinct sessions; further technical context required"]}
     if bullflow_profile is not None:
         prof = _mapping(bullflow_profile)
         obj = prof.get("data", {})
