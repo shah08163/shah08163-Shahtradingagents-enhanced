@@ -30,14 +30,14 @@ def _records(records, source_type):
             continue
         if not _timestamp(item.get("published_at")):
             continue
-        if source_type == "fundamentals":
-            if not item.get("period_end") or not item.get("filing_type"):
-                continue
-        if source_type == "social":
-            if not isinstance(item.get("sample_size"), int) or item["sample_size"] < 1:
-                continue
-            if item.get("deduplicated") is not True:
-                continue
+        if (source_type == "fundamentals"
+                and (not item.get("period_end") or not item.get("filing_type"))):
+            continue
+        if (source_type == "social"
+                and (not isinstance(item.get("sample_size"), int)
+                     or item["sample_size"] < 1
+                     or item.get("deduplicated") is not True)):
+            continue
         good.append(item)
     return good
 
