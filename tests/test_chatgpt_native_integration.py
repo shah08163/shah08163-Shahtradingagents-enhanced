@@ -9,7 +9,7 @@ from pathlib import Path
 
 from scripts.chatgpt_native_runner import assemble
 from scripts.validate_chatgpt_research import validate
-from tradingagents.ses import AnalystEvidence, TradeGate, score_evidence, decide_trade
+from tradingagents.ses import AnalystEvidence, TradeGate, decide_trade, score_evidence
 
 SHA = "768d0a218f53ac54b47e8423cb127e1c972bb8f7"
 FIXTURE = Path(__file__).parent / "fixtures" / "googl_20261028_connector_smoke.json"
