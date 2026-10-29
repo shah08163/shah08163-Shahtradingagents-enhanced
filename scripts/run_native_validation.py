@@ -11,6 +11,7 @@ TESTS = [
     'tests/test_chatgpt_ses_adapter.py',
     'tests/test_ses_v1.py',
     'tests/test_chatgpt_research_sources.py',
+    'tests/test_chatgpt_analyst_rubric.py',
 ]
 if __name__ == '__main__':
     raise SystemExit(subprocess.call([sys.executable, '-m', 'pytest', '-v', '--noconftest', *TESTS]))
