@@ -1,5 +1,7 @@
 import unittest
 
+import json
+
 from scripts.chatgpt_connector_evidence import map_connector_data
 from scripts.chatgpt_native_runner import assemble
 
@@ -9,7 +11,7 @@ class ConnectorEvidenceTests(unittest.TestCase):
             "retrieved_at_utc":"2026-10-29T01:55:47Z",
             "data":{"quote":{"closePrice":320.58},
                     "extended":{"lastPrice":292.61}}}
-        evidence=map_connector_data(schwab_quote={"text":__import__("json").dumps(quote)})
+        evidence=map_connector_data(schwab_quote={"text":json.dumps(quote)})
         self.assertEqual(evidence["market"]["status"], "PARTIAL")
         report=assemble("GOOGL", "bd5fddea38c5936b", evidence)
         self.assertFalse(report["complete"])
