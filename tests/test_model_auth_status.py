@@ -37,3 +37,22 @@ def test_unreadable_encrypted_record_distinguished(monkeypatch):
     monkeypatch.setattr(auth_store, '_decrypt', lambda p: (_ for _ in ()).throw(ValueError('sensitive')))
     assert auth_store._postgres_read() == {}
     assert auth_store._last_read_status == 'STORED_SIGN_IN_UNREADABLE'
+
+
+@pytest.mark.parametrize('message,state', [
+    ('renew invalid_grant secret', 'REFRESH_GRANT_REJECTED'),
+    ('Could not reach OpenAI secret', 'AUTH_PROVIDER_UNREACHABLE'),
+    ('unrecognized secret', 'AUTH_RENEWAL_FAILED'),
+])
+def test_renewal_errors_are_allowlisted(monkeypatch, message, state):
+    def fail():
+        raise auth_store.chatgpt_auth.ChatGPTAuthError(message)
+    monkeypatch.setattr(auth_store.chatgpt_auth, 'access_token', fail)
+    result = auth_store.renew_model_auth()
+    assert result['state'] == state
+    assert 'secret' not in str(result)
+
+
+def test_renewal_never_returns_token(monkeypatch):
+    monkeypatch.setattr(auth_store.chatgpt_auth, 'access_token', lambda: 'secret-token')
+    assert auth_store.renew_model_auth() == {'state': 'TOKEN_AVAILABLE_NOT_MODEL_VERIFIED'}

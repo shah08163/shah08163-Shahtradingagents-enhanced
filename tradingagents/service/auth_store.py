@@ -149,3 +149,24 @@ def install_postgres_auth_store() -> bool:
         chatgpt_auth._write = _postgres_write
         _installed = True
     return True
+
+
+def renew_model_auth() -> dict:
+    """Attempt normal renewal of existing sign-in; return no credential material."""
+    try:
+        chatgpt_auth.access_token()
+        return {"state": "TOKEN_AVAILABLE_NOT_MODEL_VERIFIED"}
+    except chatgpt_auth.ChatGPTAuthError as exc:
+        message = str(exc).lower()
+        reasons = (
+            ("invalid_grant", "REFRESH_GRANT_REJECTED"),
+            ("invalid_client", "CLIENT_REGISTRATION_REJECTED"),
+            ("not signed in", "NO_STORED_SIGN_IN"),
+            ("could not reach", "AUTH_PROVIDER_UNREACHABLE"),
+            ("could not renew", "AUTH_RENEWAL_TEMPORARILY_UNAVAILABLE"),
+            ("id token", "ID_TOKEN_VERIFICATION_FAILED"),
+            ("another account", "ACCOUNT_MISMATCH"),
+            ("did not renew", "AUTH_RENEWAL_REFUSED"),
+        )
+        reason = next((code for marker, code in reasons if marker in message), "AUTH_RENEWAL_FAILED")
+        return {"state": reason, "error_type": type(exc).__name__}
