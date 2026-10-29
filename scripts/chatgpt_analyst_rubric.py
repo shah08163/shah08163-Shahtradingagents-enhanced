@@ -52,8 +52,6 @@ def assess_numeric_input(analyst, claim, report_record):
             reasons.append(key + " missing or outside [0,1]")
     if not isinstance(claim.get("rubric_id"), str) or not claim["rubric_id"].strip():
         reasons.append("versioned directional rubric required")
-    if claim.get("direction_basis") != DIRECTION_BASIS.get(analyst, claim.get("direction_basis")):
-        reasons.append("unqualified directional evidence")
     if analyst in DIRECTION_BASIS and direction not in (0, None):
         if claim.get("direction_basis") != DIRECTION_BASIS[analyst]:
             reasons.append("unqualified directional evidence")
