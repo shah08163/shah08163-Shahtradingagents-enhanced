@@ -6,7 +6,7 @@ class ConnectorEvidenceTests(unittest.TestCase):
     def test_schwab_quote_maps_without_score(self):
         quote = {"source":"Schwab Market Data API", "symbol":"GOOGL",
             "retrieved_at_utc":"2026-10-29T01:55:47Z",
-            "data":{"regular":{"regularMarketLastPrice":324.89},
+            "data":{"quote":{"closePrice":320.58},
                     "extended":{"lastPrice":292.61}}}
         evidence=map_connector_data(schwab_quote={"text":__import__("json").dumps(quote)})
         self.assertEqual(evidence["market"]["status"], "PARTIAL")
