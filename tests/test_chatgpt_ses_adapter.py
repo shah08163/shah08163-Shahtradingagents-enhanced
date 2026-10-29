@@ -11,7 +11,7 @@ def reports():
     return assemble("GOOGL", SHA, evidence)
 def numbers():
     return {a: {"score": 0.0, "confidence": 1.0, "quality": 1.0, "freshness": 1.0,
-        "source_ids": [a + ":synthetic"]} for a in ANALYSTS}
+        "source_ids": [a + ":synthetic"], "rubric_id": "synthetic-regression-v1"} for a in ANALYSTS}
 class AdapterTests(unittest.TestCase):
     def test_missing_numeric_fails_closed(self):
         r=attach_score(reports(), {})
