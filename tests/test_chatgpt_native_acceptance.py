@@ -1,8 +1,9 @@
 import json
 import unittest
 from pathlib import Path
-from scripts.run_native_acceptance import run_case
+
 from scripts.chatgpt_connector_evidence import map_connector_data
+from scripts.run_native_acceptance import run_case
 
 SHA="0c0d420de76f9477216e800a05bb8a3e94581a60"
 FIXTURE=Path(__file__).parent / "fixtures" / "googl_20261028_connector_smoke.json"
