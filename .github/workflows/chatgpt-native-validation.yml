@@ -1,0 +1,21 @@
+name: ChatGPT-native research validation
+on:
+  push:
+    branches: [chatgpt-native-research-contract-20261028]
+  pull_request:
+    paths:
+      - "scripts/validate_chatgpt_research.py"
+      - "tests/test_chatgpt_research_validation.py"
+      - ".github/workflows/chatgpt-native-validation.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run fail-closed envelope tests
+        run: python -m unittest discover -s tests -p 'test_chatgpt_research_validation.py' -v
