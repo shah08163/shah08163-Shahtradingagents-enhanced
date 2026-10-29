@@ -26,6 +26,11 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(r["ses_trade_decision"], "NO_TRADE")
         self.assertFalse(r["actionable"])
         self.assertEqual(validate(r), [])
+    def test_incomplete_sources_are_rejected(self):
+        report=reports()
+        report["analysts"]["social"]["sources"]=[]
+        scored=attach_score(report, numbers())
+        self.assertIsNone(scored["shah_score"])
     def test_unqualified_direction_rejected(self):
         n=numbers();n["oi"]["score"]=0.3
         self.assertIsNone(attach_score(reports(), n)["shah_score"])
