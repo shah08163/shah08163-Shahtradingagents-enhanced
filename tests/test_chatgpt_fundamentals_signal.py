@@ -2,7 +2,6 @@ import unittest
 
 from scripts.chatgpt_fundamentals_signal import analyze_fundamentals
 
-
 CURRENT = {
     "period_end": "2026-09-30", "fiscal_period": "Q3", "period_type": "quarter",
     "currency": "USD", "revenue": 120, "operating_income": 25,
