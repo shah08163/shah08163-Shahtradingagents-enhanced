@@ -25,7 +25,7 @@ def assess_flow(events):
     # Cumulative premium is descriptive only; ASK/BID alone does not
     # determine whether an option trade opens or closes.
     return {"status": "PARTIAL", "direction": None,
-            "event_ids": sorted(set(e["event_id"] for e in qualified)),
+            "event_ids": sorted({e["event_id"] for e in qualified}),
             "qualified_count": len(qualified),
             "reason": "Opening/closing position and trade intent unconfirmed"}
 
