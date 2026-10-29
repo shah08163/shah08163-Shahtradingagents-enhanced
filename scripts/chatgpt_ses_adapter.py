@@ -6,6 +6,7 @@ No provider calls or order execution. A missing analyst/metric produces null.
 from dataclasses import asdict
 from math import isfinite
 
+from scripts.chatgpt_analyst_rubric import assess_numeric_input
 from scripts.validate_chatgpt_research import ANALYSTS, validate
 from tradingagents.ses import AnalystEvidence, TradeGate, decide_trade, score_evidence
 
@@ -25,7 +26,8 @@ def attach_score(report, numeric_evidence, gates=None):
     for name in ANALYSTS:
         item = numeric_evidence.get(name)
         cited = report.get("analysts", {}).get(name, {})
-        if not isinstance(item, dict) or cited.get("status") != "VERIFIED":
+        accepted, reasons = assess_numeric_input(name, item, cited)
+        if accepted is None:
             return result
         direction = item.get("score")
         if isinstance(direction, bool) or not isinstance(direction, (int, float)) or not isfinite(direction) or not -1 <= direction <= 1:
