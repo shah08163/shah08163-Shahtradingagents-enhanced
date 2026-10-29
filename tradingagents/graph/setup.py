@@ -20,6 +20,7 @@ from tradingagents.agents import (
     create_sentiment_analyst,
     create_trader,
 )
+from tradingagents.agents.analysts.connected_derivatives import create_connected_derivatives_analyst
 from tradingagents.agents.analysts.turn import WRAP_UP
 from tradingagents.agents.state import AgentState
 
@@ -99,12 +100,14 @@ class GraphSetup:
         deep_thinking_llm: Any,
         conditional_logic: ConditionalLogic,
         max_tool_rounds: int,
+        evidence_loader=None,
     ):
         """Initialize with required components."""
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.conditional_logic = conditional_logic
         self.max_tool_rounds = max_tool_rounds
+        self.evidence_loader = evidence_loader
 
     def setup_graph(
         self, selected_analysts=("market", "social", "news", "fundamentals"), memory_node=None
@@ -128,6 +131,14 @@ class GraphSetup:
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
         }
+
+        derivatives = set(selected_analysts) & {"flow", "oi", "dealer"}
+        if derivatives and self.evidence_loader is None:
+            raise ValueError("connected derivatives require an explicit evidence_loader")
+        for key in derivatives:
+            analyst_factories[key] = lambda key=key: create_connected_derivatives_analyst(
+                self.quick_thinking_llm, key, self.evidence_loader
+            )
 
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
         bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)

@@ -1,0 +1,26 @@
+name: ChatGPT-native research validation
+on:
+  push:
+    branches: [chatgpt-native-research-contract-20261028]
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "tradingagents/ses.py"
+      - "tradingagents/ses_calibration.py"
+      - "tests/test_chatgpt*.py"
+      - "tests/test_ses_v1.py"
+      - ".github/workflows/chatgpt-native-validation.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: python -m pip install pytest python-dotenv
+      - name: Run isolated ChatGPT-native validation
+        run: python scripts/run_native_validation.py

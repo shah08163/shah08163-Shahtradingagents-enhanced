@@ -54,6 +54,10 @@ class AgentState(MessagesState):
     news_report: Annotated[str, "Report from the News Analyst on company and world news"]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Analyst"]
 
+    flow_report: Annotated[str, "Connected institutional flow report"]
+    oi_report: Annotated[str, "Connected open interest report"]
+    dealer_report: Annotated[str, "Connected modeled dealer exposure report"]
+
     # researcher team discussion step
     investment_debate_state: Annotated[
         InvestDebateState, "Current state of the debate on if to invest or not"
