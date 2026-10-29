@@ -52,3 +52,24 @@ def test_missing_evidence_never_calls_model(key):
     node = create_connected_derivatives_analyst(model, key, snapshot_evidence_loader({}))
     assert 'UNAVAILABLE' in node({'company_of_interest': 'GOOGL', 'trade_date': '2026-10-28'})[key+'_report']
     model.invoke.assert_not_called()
+
+
+@pytest.mark.parametrize('stamp', ['2026-10-30T00:00:00Z', '2026-10-28T10:00:00'])
+def test_future_session_and_naive_evidence_rejected(stamp):
+    model = Mock()
+    loader = snapshot_evidence_loader({'oi': [{'ticker': 'GOOGL', 'source': 'test',
+                                             'as_of': stamp, 'payload': {}}]})
+    with pytest.raises(ValueError):
+        create_connected_derivatives_analyst(model, 'oi', loader)(
+            {'company_of_interest': 'GOOGL', 'trade_date': '2026-10-28'})
+    model.invoke.assert_not_called()
+
+
+def test_blank_model_report_is_unavailable():
+    model = Mock()
+    model.invoke.return_value.content = ''
+    loader = snapshot_evidence_loader({'flow': [{'ticker': 'GOOGL', 'source': 'test',
+        'as_of': '2026-10-28T20:00:00Z', 'payload': {}}]})
+    report = create_connected_derivatives_analyst(model, 'flow', loader)(
+        {'company_of_interest': 'GOOGL', 'trade_date': '2026-10-28'})
+    assert report['flow_report'].startswith('UNAVAILABLE')

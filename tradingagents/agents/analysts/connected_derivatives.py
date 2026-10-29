@@ -4,7 +4,8 @@ ChatGPT supplies timestamped evidence through the caller-owned loader. These
 factories do not replace the original four analysts or imply live validation.
 """
 import json
-from datetime import datetime
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 POLICIES = {
     "flow": "Use qualifying single-leg SWEEP/BLOCK executions for direction. Separate MULTI. Do not infer opening intent from execution side alone.",
@@ -18,7 +19,7 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
 
     Loader receives (analyst, ticker, trade_date) and returns source envelopes:
     source, as_of (timezone-aware ISO), ticker, payload. No implicit fallback.
-    Registration and downstream consumption remain separate integration work.
+    Registered optionally; the original four-analyst default remains unchanged.
     """
     if analyst not in POLICIES:
         raise ValueError("unsupported derivatives analyst")
@@ -31,11 +32,13 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
         for item in evidence:
             if item.get("ticker", "").upper() != ticker:
                 raise ValueError("connected evidence ticker mismatch")
-            if not item.get("source") or "payload" not in item:
+            if not item.get("source") or item.get("payload") is None:
                 raise ValueError("connected evidence source/payload required")
             stamp = datetime.fromisoformat(item.get("as_of", "").replace("Z", "+00:00"))
             if stamp.tzinfo is None:
                 raise ValueError("connected evidence timezone required")
+            if stamp.astimezone(ZoneInfo("America/New_York")).date() > date.fromisoformat(state["trade_date"]):
+                raise ValueError("connected evidence postdates research session")
         prompt = (
             f"Analyze {ticker} as the {analyst} analyst for {state['trade_date']}. "
             + POLICIES[analyst]
@@ -46,7 +49,12 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
             + json.dumps(evidence, allow_nan=False)
         )
         response = llm.invoke(prompt)
-        return {f"{analyst}_report": response.content}
+        report = response.content
+        if not isinstance(report, str) or not report.strip():
+            return {f"{analyst}_report": "UNAVAILABLE: model returned no text report"}
+        if not report.lstrip().startswith(("VERIFIED", "PARTIAL", "UNAVAILABLE")):
+            report = "PARTIAL: model omitted required status; review needed\n" + report
+        return {f"{analyst}_report": report}
 
     return node
 
