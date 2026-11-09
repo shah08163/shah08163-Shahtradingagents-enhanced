@@ -47,12 +47,17 @@ class AgentState(MessagesState):
     asset_type: Annotated[str, "Asset type under analysis such as stock or crypto"]
     instrument_context: Annotated[str, "Deterministic ticker identity resolved at run start"]
     trade_date: Annotated[str, "The analysis date; data is served as of it"]
+    schwab_cloudflare_chain_summary: Annotated[str, "Validated client-supplied Cloudflare Schwab chain summary"]
 
     # research step
     market_report: Annotated[str, "Report from the Market Analyst"]
     sentiment_report: Annotated[str, "Report from the Sentiment Analyst"]
     news_report: Annotated[str, "Report from the News Analyst on company and world news"]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Analyst"]
+    flow_report: Annotated[str, "Bullflow institutional options-flow report"]
+    oi_report: Annotated[str, "Bullflow open-interest and fresh-positioning report"]
+    dealer_positioning_report: Annotated[str, "Bullflow GEX/VEX dealer-positioning report"]
+    evidence_report: Annotated[str, "Normalized confidence/data-quality/freshness evidence matrix"]
 
     # researcher team discussion step
     investment_debate_state: Annotated[

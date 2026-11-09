@@ -17,6 +17,7 @@ def create_research_manager(llm):
     def research_manager_node(state) -> dict:
         instrument_context = get_instrument_context_from_state(state)
         history = state["investment_debate_state"].get("history", "")
+        evidence_report = state.get("evidence_report", "<unavailable>")
 
         investment_debate_state = state["investment_debate_state"]
 
@@ -35,7 +36,12 @@ def create_research_manager(llm):
 
 The debate always contains conflicting arguments; deciding which side is stronger is the job, so conflict alone is not a reason to Hold. Commit to the side with the stronger case, sized by how decisively it wins. Choose Hold only when the evidence is still balanced after that weighing, or too thin to support a call; do not manufacture a direction to appear decisive. Weigh the bull and bear cases on their merits, independent of which side spoke first or last.
 
+Use the confidence-weighted evidence matrix as an audit constraint, not an automatic signal. The aggregate score is a deterministic combination of normalized direction, confidence, data quality, and freshness. You may override its directional implication only when the debate identifies a concrete reason a specific row is mischaracterized or deserves different treatment. If you override it, state that reason in the rationale. Do not let a low-quality source dominate simply because its narrative is vivid or long.
+
 ---
+
+**Confidence-Weighted Evidence Matrix:**
+{evidence_report}
 
 **Debate History:**
 {history}
@@ -45,7 +51,7 @@ The debate always contains conflicting arguments; deciding which side is stronge
 Write these sections, in this order, starting with the recommendation on its own line:
 
 - **Recommendation**: exactly one of Buy / Overweight / Hold / Underweight / Sell
-- **Rationale**: which arguments decided it
+- **Rationale**: which arguments decided it, including how the weighted evidence matrix influenced the call
 - **Strategic Actions**: concrete steps for the trader, sized against a standard allocation
 
 {NO_EXTERNAL_TOOLS}""" + get_language_instruction()

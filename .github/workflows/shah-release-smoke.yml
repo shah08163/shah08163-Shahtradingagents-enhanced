@@ -1,0 +1,19 @@
+name: Shah TradingAgents release smoke
+on:
+  push:
+    branches: [feature/shah-milestone-1]
+  workflow_dispatch:
+jobs:
+  dashboard-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install service and tests
+        run: pip install ".[service]" pytest httpx
+      - name: Validate HTTP security and Schwab data handling
+        run: python -m pytest -q tests/test_dashboard_security.py tests/test_schwab_chain.py

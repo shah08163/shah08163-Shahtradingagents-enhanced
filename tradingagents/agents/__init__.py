@@ -1,6 +1,10 @@
+from .analysts.dealer_positioning_analyst import create_dealer_positioning_analyst
+from .analysts.evidence_weigher import create_evidence_weigher
+from .analysts.flow_analyst import create_flow_analyst
 from .analysts.fundamentals_analyst import create_fundamentals_analyst
 from .analysts.market_analyst import create_market_analyst
 from .analysts.news_analyst import create_news_analyst
+from .analysts.oi_analyst import create_oi_analyst
 from .analysts.sentiment_analyst import create_sentiment_analyst
 from .managers.portfolio_manager import create_portfolio_manager
 from .managers.research_manager import create_research_manager
@@ -19,10 +23,14 @@ __all__ = [
     "create_bear_researcher",
     "create_bull_researcher",
     "create_research_manager",
+    "create_dealer_positioning_analyst",
+    "create_evidence_weigher",
+    "create_flow_analyst",
     "create_fundamentals_analyst",
     "create_market_analyst",
     "create_neutral_debator",
     "create_news_analyst",
+    "create_oi_analyst",
     "create_aggressive_debator",
     "create_portfolio_manager",
     "create_conservative_debator",
