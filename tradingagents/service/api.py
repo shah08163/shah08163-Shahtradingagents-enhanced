@@ -69,6 +69,10 @@ class AnalyzeRequest(BaseModel):
     checkpoint: bool | None = None
     save_reports: bool = False
     html_report: bool = True
+    schwab_cloudflare_snapshot: dict | None = Field(
+        default=None,
+        description="Optional Schwab Cloudflare MCP explorer payload (0-60 DTE), retrieved by ChatGPT. Do not include credentials.",
+    )
 
 
 class AnalyzeResponse(BaseModel):
@@ -235,9 +239,20 @@ def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
             )
 
         trade_date = request.trade_date or get_current_date()
+        cloudflare_summary = ""
+        if request.schwab_cloudflare_snapshot is not None:
+            if "oi" not in analysts or request.asset_type != "stock":
+                raise ValueError("Cloudflare Schwab snapshot requires the stock OI analyst")
+            from tradingagents.dataflows.vendors.cloudflare_snapshot import summarize_cloudflare_snapshot
+            cloudflare_summary = summarize_cloudflare_snapshot(
+                request.schwab_cloudflare_snapshot, ticker, trade_date,
+            )
         config = build_default_config()
         if request.checkpoint is not None:
             config["checkpoint_enabled"] = request.checkpoint
+        if cloudflare_summary:
+            # Do not resume a checkpoint created with a different market-data snapshot.
+            config["checkpoint_enabled"] = False
 
         graph = TradingAgentsGraph(
             selected_analysts=analysts,
@@ -248,6 +263,7 @@ def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
             ticker,
             trade_date,
             asset_type=request.asset_type,
+            schwab_cloudflare_chain_summary=cloudflare_summary,
         )
 
         report_path: Path | None = None
