@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import math
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 MAX_CONTRACTS = 7500
 MAX_AGE = timedelta(hours=6)
@@ -25,7 +25,7 @@ def _timestamp(value: object) -> datetime:
         raise ValueError("Cloudflare snapshot retrieval timestamp is invalid") from exc
     if parsed.tzinfo is None:
         raise ValueError("Cloudflare snapshot retrieval timestamp lacks timezone")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def _number(value: object, *, nonnegative: bool = False) -> float | None:
@@ -57,7 +57,7 @@ def summarize_cloudflare_snapshot(snapshot: dict, symbol: str, trade_date: str, 
     if spot is None or spot <= 0:
         raise ValueError("Cloudflare snapshot has no valid underlying price")
     retrieved = _timestamp(underlying.get("retrieval_timestamp"))
-    age = datetime.now(timezone.utc) - retrieved
+    age = datetime.now(UTC) - retrieved
     if age > MAX_AGE or age < -timedelta(minutes=10):
         raise ValueError("Cloudflare snapshot was not retrieved recently")
     rows = snapshot.get("contracts")
