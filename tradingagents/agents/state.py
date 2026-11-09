@@ -47,6 +47,7 @@ class AgentState(MessagesState):
     asset_type: Annotated[str, "Asset type under analysis such as stock or crypto"]
     instrument_context: Annotated[str, "Deterministic ticker identity resolved at run start"]
     trade_date: Annotated[str, "The analysis date; data is served as of it"]
+    schwab_cloudflare_chain_summary: Annotated[str, "Validated client-supplied Cloudflare Schwab chain summary"]
 
     # research step
     market_report: Annotated[str, "Report from the Market Analyst"]
