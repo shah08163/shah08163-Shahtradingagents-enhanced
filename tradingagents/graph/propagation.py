@@ -18,6 +18,7 @@ class Propagator:
         past_context: str = "",
         instrument_context: str = "",
         portfolio_context: str = "",
+        schwab_cloudflare_chain_summary: str = "",
     ) -> dict[str, Any]:
         """Create the initial state for the agent graph.
 
@@ -33,6 +34,7 @@ class Propagator:
             "asset_type": asset_type,
             "instrument_context": instrument_context,
             "trade_date": str(trade_date),
+            "schwab_cloudflare_chain_summary": schwab_cloudflare_chain_summary,
             "past_context": past_context,
             "memory_note": "",
             "portfolio_context": portfolio_context,

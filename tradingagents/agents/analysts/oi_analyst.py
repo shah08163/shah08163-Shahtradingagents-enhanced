@@ -13,14 +13,14 @@ def create_oi_analyst(llm):
         trade_date = state["trade_date"]
         instrument_context = get_instrument_context_from_state(state)
         data = fetch_oi_bundle(ticker, trade_date)
-        schwab = fetch_chain_summary(ticker, trade_date)
+        schwab = state.get("schwab_cloudflare_chain_summary") or fetch_chain_summary(ticker, trade_date)
 
         prompt = f"""You are the Options Open Interest Analyst inside a multi-agent trading research system.
 Analyze {ticker} as of {trade_date}, focusing on Bullflow recorded flow plus Schwab full-chain OI and implied volatility when available.
 
 {instrument_context}
 
-Use only supplied evidence. Bullflow does NOT provide full-chain OI. When Schwab is available, distinguish snapshot OI concentrations from confirmed barriers; report near-ATM IV by expiration and side; only report put/call skew when matched-strike comparison status is observed, and never infer zero skew from identical vendor IV. The chain scope is 0-60 DTE. A current Schwab snapshot must not be applied to historical trade dates.
+Use only supplied evidence. The Schwab snapshot can be supplied through the authenticated ChatGPT Cloudflare connector (not directly authenticated by the research backend). Bullflow does NOT provide full-chain OI. When Schwab is available, distinguish snapshot OI concentrations from confirmed barriers; report near-ATM IV by expiration and side; only report put/call skew when matched-strike comparison status is observed, and never infer zero skew from identical vendor IV. The chain scope is 0-60 DTE. A current Schwab snapshot must not be applied to historical trade dates.
 
 {data}
 
