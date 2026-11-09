@@ -174,7 +174,9 @@ def run_trading_research(
     Omit analysts to run all seven. OI uses Schwab full-strike 0-60 DTE data
     and Bullflow where available. For Cloudflare: first call the authenticated
     Schwab Cloudflare schwab_explorer tool for 0-60 DTE in ChatGPT, then pass
-    its result as schwab_cloudflare_snapshot. Render validates the data without
+    only its source, symbol, range, underlying timestamps and per-contract
+    expiration/call_put/strike/open_interest/implied_volatility_pct fields as
+    schwab_cloudflare_snapshot. Render validates the data without
     receiving Cloudflare credentials. If omitted, use the existing Schwab bridge.
     Long runs continue in the background.
 
