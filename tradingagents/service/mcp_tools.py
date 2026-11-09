@@ -166,12 +166,17 @@ def run_trading_research(
     ticker: str,
     analysts: list[str] | None = None,
     wait_seconds: int = 5,
+    schwab_cloudflare_snapshot: dict | None = None,
 ) -> dict:
     """Start stock/ETF research and return promptly with its run ID.
 
     Available analysts: market, social, news, fundamentals, flow, oi, dealer.
     Omit analysts to run all seven. OI uses Schwab full-strike 0-60 DTE data
-    and Bullflow where available. Long runs continue in the background.
+    and Bullflow where available. For Cloudflare: first call the authenticated
+    Schwab Cloudflare schwab_explorer tool for 0-60 DTE in ChatGPT, then pass
+    its result as schwab_cloudflare_snapshot. Render validates the data without
+    receiving Cloudflare credentials. If omitted, use the existing Schwab bridge.
+    Long runs continue in the background.
 
     If status is queued or running, call get_trading_research_result with the
     returned run_id and wait_seconds=15. Repeat until completed or failed.
@@ -195,6 +200,7 @@ def run_trading_research(
         analysts=selected,
         save_reports=False,
         checkpoint=False,
+        schwab_cloudflare_snapshot=schwab_cloudflare_snapshot,
     )
     normalized_ticker = request.ticker.strip().upper()
     selected_analysts = list(request.analysts)
