@@ -1,7 +1,7 @@
 """Cloudflare Schwab MCP snapshot validation and OI/IV summary tests."""
 import json
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from tradingagents.dataflows.vendors.cloudflare_snapshot import summarize_cloudflare_snapshot
 
@@ -14,7 +14,7 @@ def sample_snapshot():
         "requested_range": {"min_dte": 0, "max_dte": 60},
         "underlying": {
             "last": 515.25,
-            "retrieval_timestamp": datetime.now(timezone.utc).isoformat(),
+            "retrieval_timestamp": datetime.now(UTC).isoformat(),
             "provider_quote_timestamp": "2026-11-06T21:00:00Z",
             "realtime_delayed": "Realtime",
         },
@@ -51,7 +51,7 @@ class CloudflareSnapshotTests(unittest.TestCase):
 
     def test_stale_retrieval_rejected(self):
         snap = sample_snapshot()
-        snap["underlying"]["retrieval_timestamp"] = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        snap["underlying"]["retrieval_timestamp"] = (datetime.now(UTC) - timedelta(days=2)).isoformat()
         with self.assertRaisesRegex(ValueError, "recently"):
             summarize_cloudflare_snapshot(snap, "LIN", date.today().isoformat())
 
