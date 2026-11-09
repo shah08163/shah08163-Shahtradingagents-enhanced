@@ -243,7 +243,9 @@ def execute_analysis(request: AnalyzeRequest) -> AnalyzeResponse:
         if request.schwab_cloudflare_snapshot is not None:
             if "oi" not in analysts or request.asset_type != "stock":
                 raise ValueError("Cloudflare Schwab snapshot requires the stock OI analyst")
-            from tradingagents.dataflows.vendors.cloudflare_snapshot import summarize_cloudflare_snapshot
+            from tradingagents.dataflows.vendors.cloudflare_snapshot import (
+                summarize_cloudflare_snapshot,
+            )
             cloudflare_summary = summarize_cloudflare_snapshot(
                 request.schwab_cloudflare_snapshot, ticker, trade_date,
             )
