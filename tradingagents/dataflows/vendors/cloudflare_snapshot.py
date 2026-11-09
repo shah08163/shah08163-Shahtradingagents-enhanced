@@ -7,10 +7,10 @@ are accepted, stored, or logged by this module.
 """
 from __future__ import annotations
 
-from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
 import json
 import math
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
 
 MAX_CONTRACTS = 7500
 MAX_AGE = timedelta(hours=6)
