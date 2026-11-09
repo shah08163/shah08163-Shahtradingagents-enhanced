@@ -2,7 +2,6 @@
 import json
 import unittest
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import patch
 
 from tradingagents.dataflows.vendors.cloudflare_snapshot import summarize_cloudflare_snapshot
 
