@@ -68,3 +68,22 @@ A role may be PARTIAL or UNAVAILABLE where evidence is missing. Report all seven
 - Seven-role all-evidence end-to-end acceptance: **pending**.
 - Original graph execution parity: **not certified**.
 - Render retirement: **not approved or performed**.
+
+
+## Preliminary native connector smoke-check — 2026-11-16
+
+This was a direct connector and public-source check in ChatGPT. It was **not** a complete analyst run: no seven-record report, debate, trader synthesis, three risk views, or PM decision was generated. All seven role statuses below remain PARTIAL. Original graph execution is false; parity is not certified.
+
+| Role | Result | Evidence and open limit |
+| --- | --- | --- |
+| Market | PARTIAL | Schwab returned SPY and GOOGL quotes around 23:11 UTC and full 0–60 DTE chains (5,958 SPY; 2,174 GOOGL). Alpaca IEX daily bars ended Nov 12 for SPY but Nov 16 for GOOGL. Schwab contract quote timestamps were about 1.9 hours old, so chain data supports observation, not trade pricing. |
+| Social | PARTIAL | Search surfaced dated Reddit posts and third-party aggregation for both tickers. This was not a systematic source-native sample with a reproducible capture window and complete post counts; sentiment confidence remains low. |
+| News | PARTIAL | Search surfaced same-day market coverage and the official Alphabet Q3 2026 results filing. This discovery pass did not build a complete catalyst timeline or corroborate all material events. |
+| Fundamentals | PARTIAL | Official SEC results for Alphabet and State Street SPY fund/holdings information were found. The full period-matched financial and ETF exposure/valuation analysis was not run. |
+| Flow | PARTIAL | Bullflow returned 2026-11-16 recorded-flow profiles at 21:56:46Z: SPY 2,320,463 contracts and -$8.67M net directional premium; GOOGL 182,393 contracts and +$9.41M. Coverage is recorded flow, not a full-market census; profile totals alone do not validate each SWEEP/BLOCK print. |
+| OI | PARTIAL | Schwab returned 5,958 SPY and 2,174 GOOGL contracts over 0–60 DTE. This same-session retrieval does not establish OI change. The Nov 16 archive is one date; a later comparable session is required. |
+| Dealer | PARTIAL | Bullflow returned OI-GEX, volume-GEX, and VEX for both underlyings. Spot references were close but not identical (SPY about 740.49–740.55; GOOGL about 284.27–284.38). These remain modeled exposures, not verified dealer positions. |
+
+Observed technical checks: Alpaca IEX returned 29 SPY daily bars ending Nov 12 and 31 GOOGL daily bars ending Nov 16. Calculated GOOGL 20-session SMA was about $300.41 and RSI(14) about 31.55; SPY's corresponding values use stale bars through Nov 12 (SMA about $759.50; RSI(14) about 48.84) and must not be represented as Nov 16 indicators.
+
+Sources used during discovery: Schwab Cloudflare Web, Bullflow Connection, Alpaca IEX, web search, the SEC's Alphabet Q3 results, State Street's SPY page, and dated Reddit/search results. Source references are in the ChatGPT run transcript. **Render calls: 0. Legacy Shah research-service calls: 0.**
