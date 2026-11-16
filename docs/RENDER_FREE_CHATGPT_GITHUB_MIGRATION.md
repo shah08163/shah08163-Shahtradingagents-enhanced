@@ -18,7 +18,7 @@ This is a workflow replacement, not execution of the original Python/LangGraph g
 - `tradingagents/service/mcp_oauth.py` stores OAuth client/flow/code/access-token/refresh-token records in Postgres for the hosted MCP endpoint.
 - `tradingagents/service/mcp_tools.py` reserves quota before queueing research. Research run state is held in process memory and expires after 30 minutes; it is not persisted in Postgres.
 - The source audit records a rejected ChatGPT OAuth refresh grant and failed hosted model authentication. It does not establish the exact current Render deployment revision or the purpose of the separate Valkey service.
-- PR #14 is still draft and explicitly experimental; PR #17 is a separate draft containing the first dated OI snapshot archive. Neither is merged.
+- PR #14 remains draft and explicitly experimental. PR #17 merged to main as e5038721c2f31cef1c60428bb614cda14ff8b3d6, adding the first dated GOOGL/SPY OI snapshot archive.
 - The current ChatGPT-native skill defines all seven roles and evidence gates, but it is a role-based ChatGPT orchestration, not the original Python graph.
 
 ## Replacement map
@@ -31,7 +31,7 @@ This is a workflow replacement, not execution of the original Python/LangGraph g
 | Custom 10-run daily quota | ChatGPT plan limits apply | No exact custom quota equivalent |
 | In-memory background run IDs and 30-minute polling | Run research in the ChatGPT conversation and retain the result there | No independent service/API job queue |
 | Durable research methodology and version history | Versioned GitHub documents and reviewed commits | Replaced as versioned file storage, not as a queryable database |
-| OI history | Dated contract snapshots in GitHub; compare only matching contracts across distinct sessions | First baseline exists in draft PR #17; second comparable snapshot is still needed for OI change |
+| OI history | Dated contract snapshots in GitHub; compare only matching contracts across distinct sessions | Nov. 16 baseline is on main via PR #17; a later comparable snapshot is still needed for OI change |
 | Valkey auth service | Purpose not proven by repository evidence reviewed | Unknown; not required by the target design |
 
 Do not place access tokens, refresh tokens, bearer secrets, OAuth callback URLs/codes, or provider credentials in GitHub.
@@ -53,8 +53,8 @@ A role may be PARTIAL or UNAVAILABLE where evidence is missing. Report all seven
 ## Work sequence
 
 1. Freeze the native contract, record the repository SHA, and confirm that no Render/legacy Shah backend is called.
-2. Run the native workflow on SPY as the derivatives integration fixture and GOOGL as the company-fundamentals fixture. Capture each role's actual source/status and fail-closed behavior.
-3. Resolve partial roles individually: social sample availability; stable market feed/price discrepancy reporting; Bullflow coverage; Dealer spot alignment; and OI change after a second archived trading-session snapshot.
+2. GOOGL has a completed ChatGPT-native seven-role role-based run recorded below. SPY has only a connector smoke-check so far; run its full seven-role analysis as the derivatives fixture.
+3. Resolve partial roles individually: obtain a reproducible social sample; improve market feed coverage; retain Bullflow's recorded-flow scope; interpret Dealer models with spot/expiry checks; and calculate OI change after a second archived trading-session snapshot.
 4. Repeat the same workflow without ad-hoc repair and preserve run evidence without overwriting prior snapshots.
 5. Compare the native reports with recorded original outputs and pinned prompts. A similar-looking report is not parity proof. Document differences; do not change original decision rules without user approval.
 6. Only after native acceptance is reviewed should the user decide whether to retire the Render web service, Postgres database, and Valkey service. No service retirement or configuration change is authorized by this plan.
@@ -62,8 +62,8 @@ A role may be PARTIAL or UNAVAILABLE where evidence is missing. Report all seven
 ## Current acceptance state
 
 - ChatGPT-native seven-role methodology exists: **defined**.
-- Current connected source evidence exists for SPY/GOOGL: **partial; prior runs are not certification**.
-- OI snapshot baseline for GOOGL/SPY: **captured on 2026-11-16; draft PR #17**.
+- GOOGL seven-role role-based run: **completed; Flow VERIFIED, six roles PARTIAL; not original graph execution**. SPY: **connector smoke-check only**.
+- OI snapshot baseline for GOOGL/SPY: **captured on 2026-11-16; PR #17 merged to main as e5038721c2f31cef1c60428bb614cda14ff8b3d6**.
 - Comparable second OI snapshot: **pending**.
 - Seven-role all-evidence end-to-end acceptance: **pending**.
 - Original graph execution parity: **not certified**.
@@ -87,3 +87,26 @@ This was a direct connector and public-source check in ChatGPT. It was **not** a
 Observed technical checks: Alpaca IEX returned 29 SPY daily bars ending Nov 12 and 31 GOOGL daily bars ending Nov 16. Calculated GOOGL 20-session SMA was about $300.41 and RSI(14) about 31.55; SPY's corresponding values use stale bars through Nov 12 (SMA about $759.50; RSI(14) about 48.84) and must not be represented as Nov 16 indicators.
 
 Sources used during discovery: Schwab Cloudflare Web, Bullflow Connection, Alpaca IEX, web search, the SEC's Alphabet Q3 results, State Street's SPY page, and dated Reddit/search results. Source references are in the ChatGPT run transcript. **Render calls: 0. Legacy Shah research-service calls: 0.**
+
+
+## GOOGL seven-role ChatGPT-native run — 2026-11-16
+
+**Execution type:** Seven separate role-based ChatGPT analyses using direct connected read-only sources. Prompt/methodology reference: experimental source snapshot 05e67726dbcdfaffd13a5edd0ce672821288f913 (PR #14). This did not execute the original Python/LangGraph graph. No Render or legacy Shah research-service calls occurred.
+
+**As of:** After-hours, 2026-11-16. Schwab quote retrieved 23:23:04Z; chain underlying snapshot 23:22:47Z; Bullflow profile generated 23:21:20Z (trade cutoff/as-of 21:56:46Z); Bullflow GEX 23:21:20Z; VEX 23:21:21Z; Alpaca IEX daily bar for Nov. 16.
+
+| Role | Status | Evidence and interpretation |
+| --- | --- | --- |
+| Market | PARTIAL | Schwab after-hours quote about $284.25; Alpaca IEX Nov. 16 daily bar closed $283.795, with high $294.12 and low $282.975. Calculated 20-session SMA $300.41 and RSI(14) 31.55. The IEX bar volume is not consolidated market volume; after-hours quote and regular-session close are different observations. |
+| Social | PARTIAL | Public search surfaced current GOOGL Reddit/aggregator discussion, but not a reproducible source-native sample with reliable counts and a defined capture window. Sentiment confidence is low. |
+| News | PARTIAL | Latest major company event identified was the Oct. 28 Q3 earnings release. Nov. 16 market coverage reported Alphabet shares lower amid a broad market decline. This was not a complete catalyst or event-calendar review. |
+| Fundamentals | PARTIAL | SEC Q3 filing/release: revenue $127.6B (+25% YoY), operating income $40.6B (+30%), operating margin 31.8%, Google Cloud revenue $30.7B (+103%). Q3 operating cash flow was $42.3B, capex $51.4B, free cash flow -$9.1B. Management maintained 2026 capex guidance of $195B–$205B and expected higher 2027 capex. Valuation was not fully reconciled in this run. |
+| Flow | VERIFIED (recorded sample scope) | Bullflow historical flow returned 642 rows for 2026-11-16 with hasMore=false: 281 SWEEP, 203 BLOCK, 158 MULTI. Conditional directional premium from qualifying SWEEP/BLOCK rows was +$9.405M across 467 eligible observations. MULTI represented $90.8M premium and was excluded from directional bias. Coverage is recorded activity, not a market-wide census; side does not prove opening/closing intent. |
+| OI | PARTIAL | Schwab returned 2,174 contracts across 13 expirations, with OI and IV fields. The Nov. 20 $285 call/put IVs were 46.825%/45.783%, but their quote timestamps were about 7,676 seconds old. No IVR/IVP or OI change is inferred. The Nov. 16 archive is a single-date baseline; this run did not add a second trading date. |
+| Dealer | PARTIAL | Bullflow OI GEX summed about -$99.99M across expirations and -$80.87M excluding same-day expiry. Volume GEX was -$426.17M with same-day expiry included, but +$50.52M excluding it; VEX was +$277.46M. The sign change makes the regime mixed and low-confidence. These are model estimates, not verified dealer inventory. |
+
+**Synthesis:** Bull case: strong reported revenue, operating income, and Cloud growth; RSI is low; filtered SWEEP/BLOCK flow was net positive. Bear case: price is below its 20-session average; capex is pressuring free cash flow; dealer exposure changes sign when same-day expiry is removed. Trader posture was cautious/underweight watch, not executable. Aggressive risk view waits for price stabilization; neutral view waits for confirmation from price and flow; conservative view stays out pending better alignment and fresh option quotes. PM conclusion: cautious/underweight research posture, medium-low confidence. No trade, official Shah score, or original-graph output was produced.
+
+**Run gates:** Seven role records present: yes. All seven VERIFIED: no (Flow VERIFIED, six PARTIAL). ORIGINAL_GRAPH_EXECUTED=false; EXECUTION_PARITY=NOT_CERTIFIED; Render calls: 0; legacy Shah service calls: 0.
+
+**Source links:** [Alphabet Q3 2026 release (SEC)](https://www.sec.gov/Archives/edgar/data/1652044/000165204426000080/googexhibit991q32026.htm); [Alphabet Q3 2026 filing (SEC)](https://www.sec.gov/Archives/edgar/data/1652044/000165204426000084/goog-20260930.htm); [Q3 earnings call (Alphabet IR)](https://abc.xyz/investor/events/event-details/2026/2026-Q3-Earnings-Call-2026-Ujou16CTw9/default.aspx); [Nov. 16 market coverage](https://www.marketwatch.com/data-news/alphabet-inc-cl-c-stock-underperforms-monday-when-compared-to-competitors-ef4f0703-9c7bc4f35f64).
