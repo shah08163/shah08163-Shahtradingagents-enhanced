@@ -301,7 +301,7 @@ def validate_intraday_bars(
     if any(a[0] >= b[0] for a, b in zip(parsed, parsed[1:], strict=False)):
         raise ValueError("Intraday bars are not strictly chronological")
     gaps = sum(
-        1 for (a, _), (b, _) in zip(parsed, parsed[1:])
+        1 for (a, _), (b, _) in zip(parsed, parsed[1:], strict=False)
         if (b - a).total_seconds() > 15 * 60
     )
     return {
