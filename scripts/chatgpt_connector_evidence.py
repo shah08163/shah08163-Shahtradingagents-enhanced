@@ -193,6 +193,7 @@ def map_connector_data(
                     ticker=ticker, start=start, end=end,
                     schwab_as_of=_source_as_of(schwab_bars),
                     alpaca_as_of=_source_as_of(alpaca_bars),
+                    as_of_date=trade_date,
                 )
                 evidence["market"] = {
                     "status": "PARTIAL",
