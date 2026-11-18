@@ -286,22 +286,26 @@ def map_connector_data(
             chain = validate_schwab_chain(
                 schwab_explorer, ticker=ticker, trade_date=trade_date, max_dte=60,
             )
-            evidence["oi"] = {
+            oi_record = evidence.setdefault("oi", {
                 "status": chain["status"], "as_of": chain["as_of"],
-                "sources": [chain["source"]],
-                "source_provenance": [_source(
-                    f"schwab:options-chain:{ticker}:{chain['as_of']}",
-                    "Schwab", "full_strike_options_chain", chain["as_of"],
-                    share=0.65,
-                )],
-                "evidence": [
-                    f"contracts_returned={chain['contract_count']}",
-                    f"contracts_with_oi={chain['contracts_with_oi']}",
-                    f"contracts_quote_iv_usable={chain['contracts_usable_for_quote_iv']}",
-                    f"quote_freshness={chain['realtime_delayed']}",
-                ],
-                "limitations": chain["limitations"],
-            }
+                "sources": [], "source_provenance": [], "evidence": [],
+                "limitations": [],
+            })
+            oi_record["status"] = chain["status"]
+            oi_record["as_of"] = chain["as_of"]
+            oi_record["sources"].append(chain["source"])
+            oi_record["source_provenance"].append(_source(
+                f"schwab:options-chain:{ticker}:{chain['as_of']}",
+                "Schwab", "full_strike_options_chain", chain["as_of"],
+                share=0.65,
+            ))
+            oi_record["evidence"].extend([
+                f"contracts_returned={chain['contract_count']}",
+                f"contracts_with_oi={chain['contracts_with_oi']}",
+                f"contracts_quote_iv_usable={chain['contracts_usable_for_quote_iv']}",
+                f"quote_freshness={chain['realtime_delayed']}",
+            ])
+            oi_record["limitations"].extend(chain["limitations"])
         except (TypeError, ValueError, KeyError) as exc:
             evidence["oi"] = {
                 "status": "UNAVAILABLE", "as_of": None, "sources": [],
