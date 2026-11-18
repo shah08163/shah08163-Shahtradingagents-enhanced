@@ -9,6 +9,7 @@ from scripts.chatgpt_source_contract import (
     unwrap_tool_result,
     validate_bullflow_pages,
     validate_gex_history,
+    validate_intraday_bars,
     validate_range_response,
     validate_schwab_chain,
 )
@@ -75,6 +76,9 @@ def map_connector_data(
     start=None,
     end=None,
     schwab_bars=None,
+    schwab_intraday_bars=None,
+    intraday_start=None,
+    intraday_end=None,
     alpaca_bars=None,
     bullflow_flow_pages=None,
     bullflow_oi_pages=None,
@@ -148,6 +152,46 @@ def map_connector_data(
                     "Previous close and extended prices are distinct sessions; price history is required for technical analysis"
                 ],
             }
+
+    if schwab_intraday_bars is not None:
+        day_start = intraday_start or trade_date
+        day_end = intraday_end or trade_date
+        try:
+            if not (ticker and day_start and day_end):
+                raise ValueError("Ticker and exact intraday date window are required")
+            intraday = validate_intraday_bars(
+                _bars(schwab_intraday_bars), ticker=ticker,
+                source_id="Schwab Cloudflare Web 15Min",
+                start=day_start, end=day_end,
+                source_as_of=_source_as_of(schwab_intraday_bars),
+            )
+            record = evidence.setdefault("market", {
+                "status": "PARTIAL", "as_of": intraday["as_of"],
+                "sources": [], "source_provenance": [], "evidence": [],
+                "limitations": [],
+            })
+            if record.get("source_provenance"):
+                record["source_provenance"][0]["weight_share"] = 0.80
+            record["sources"].append(intraday["source_id"])
+            record["source_provenance"].append(_source(
+                f"schwab:15min:{ticker}:{day_start}:{day_end}",
+                "Schwab", "equity_intraday_15min", intraday["as_of"], share=0.20,
+            ))
+            record["evidence"].append(
+                f"completed_15min_bars={intraday['bar_count']}; "
+                f"gaps_over_15m={intraday['gap_count']}; "
+                f"window={intraday['start']}..{intraday['end']}"
+            )
+            record["context_sources"] = {"schwab_15min_bars": intraday}
+            record.setdefault("limitations", []).append(
+                "Intraday bars are a market-context checkpoint; missing intervals are not filled"
+            )
+        except (TypeError, ValueError, KeyError) as exc:
+            record = evidence.setdefault("market", {
+                "status": "PARTIAL", "as_of": None, "sources": [],
+                "source_provenance": [], "evidence": [], "limitations": [],
+            })
+            record["limitations"].append("Schwab 15-minute history unavailable: " + str(exc))
 
     prof = _mapping(bullflow_profile) if bullflow_profile is not None else None
     prof_data = prof.get("data", prof) if isinstance(prof, dict) else {}
