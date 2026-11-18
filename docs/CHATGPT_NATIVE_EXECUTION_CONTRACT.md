@@ -65,3 +65,27 @@ functional_smoke_test: partial
 logs_checked: false
 rollback_to: main (unmodified)
 status: experimental_specification_only
+
+
+## Connected-source data contract v2 (draft)
+
+### Date and pagination correctness
+- Every source request records ticker, requested date/window, returned session date, provider timestamp, retrieval timestamp, feed/status, and raw tool result.
+- Bullflow historical-flow and dark-pool pages are followed through the terminal `hasMore=false`; each page must keep the same ticker/date filters and request the preceding page's `nextCursor`. Deduplicate repeated event IDs, retain the duplicate count, and disclose incomplete pagination. Never treat a single page as the complete sample.
+- Historical Bullflow rows must remain inside the requested trading-date window. Dated EOD GEX snapshots are ordered by their returned session date and `open_interest_date`; missing sessions remain gaps.
+- Schwab daily/15-minute history uses completed bars only. Reject duplicate/out-of-window bars and require chronological dates. Exclude a still-forming current-session bar from completed-bar indicators.
+- A current Schwab chain/quote or current Bullflow GEX/VEX snapshot cannot be backdated into a historical run. For historical GEX, use only snapshots with their own explicit date and OI date.
+
+### Source priority and derivative evidence
+- Schwab Cloudflare Web `schwab_equity_history` is primary for daily and 15-minute OHLCV; Alpaca is a fallback only when Schwab fails validation. Preserve the actual source and Alpaca feed label (including IEX).
+- Schwab Cloudflare Web `schwab_explorer` is primary for full-strike OI/IV/Greeks. Default options-analysis scope remains 0–60 DTE; show longer expirations only as separately labeled context. Keep OI counts separate from quote/IV/liquidity eligibility and preserve each contract's quality flags.
+- Bullflow Flow uses the session profile, fully paginated qualifying trade records, and 1M/3M (or other explicitly requested) net-premium persistence. Do not let score/premium filters stand in for a full sample; label filtered samples and their criteria.
+- Add Bullflow dark-pool prints as non-directional price/size/notional context only. Never infer buyer versus seller intent.
+- Dealer uses current OI-weighted and volume-weighted GEX, VEX, alerts, and dated EOD GEX history when available. Compare spot and timestamps before combining; do not interpolate missing history or present model-derived exposures as actual inventory.
+
+### Score provenance and overlap
+- Each scored input records provider, endpoint/dataset, requested window, as-of time, event/snapshot IDs, and source quality. A vendor name alone does not prove independence or dependence.
+- Use component-level provenance shares when a role combines independent and overlapping sources (especially Schwab chain OI versus Bullflow flow/OI/GEX). Apply overlap discounts only to explicitly shared event IDs or explicitly declared shared measurement groups; never discount all evidence from one provider by default.
+- Keep confidence, quality, and freshness factors visible. Preserve the existing evidence-weighted structure and publish every role's effective weight and overlap adjustment. Unknown provenance cannot be called independent.
+- This remains an evidence summary, not a mechanically tradeable signal; role and source coverage stay visible.
+
