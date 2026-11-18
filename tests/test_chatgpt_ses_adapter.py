@@ -42,6 +42,10 @@ class AdapterTests(unittest.TestCase):
     def test_unqualified_direction_rejected(self):
         n=numbers()
         n["oi"]["score"]=0.3
-        self.assertIsNone(attach_score(reports(), n)["shah_score"])
+        result=attach_score(reports(), n)
+        self.assertEqual(result["shah_score"], 0.0)
+        self.assertEqual(result["shah_score_status"], "PROVISIONAL")
+        self.assertEqual(result["shah_score_details"]["coverage"]["scored_roles"], 6)
+        self.assertIn("unqualified directional evidence", result["score_input_rejections"]["oi"])
 if __name__=="__main__":
     unittest.main()
