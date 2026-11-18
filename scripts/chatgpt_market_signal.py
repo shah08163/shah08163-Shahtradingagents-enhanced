@@ -10,7 +10,7 @@ from math import isfinite
 RUBRIC = "market-trend-v0.1-experimental"
 
 
-def assess_market_bars(bars, source_id):
+def assess_market_bars(bars, source_id, *, trade_date=None):
     """Produce a PARTIAL analyst observation plus a candidate score, or null."""
     reject = {"status": "UNAVAILABLE", "score": None, "rubric_id": RUBRIC}
     if not isinstance(source_id, str) or not source_id.strip():
@@ -30,6 +30,8 @@ def assess_market_bars(bars, source_id):
                 or not isfinite(close) or close <= 0
                 or bar.get("completed") is not True):
             return reject
+        if trade_date is not None and day > date.fromisoformat(trade_date):
+            return reject
         normalized.append((day, float(close)))
     if len({day for day, _ in normalized}) != len(normalized):
         return reject
@@ -37,6 +39,14 @@ def assess_market_bars(bars, source_id):
         return reject
     close = normalized[-1][1]
     sma20 = sum(value for _, value in normalized[-20:]) / 20
+    sma50 = (
+        sum(value for _, value in normalized[-50:]) / 50
+        if len(normalized) >= 50 else None
+    )
+    sma200 = (
+        sum(value for _, value in normalized[-200:]) / 200
+        if len(normalized) >= 200 else None
+    )
     change5 = close / normalized[-6][1] - 1
     # Symmetric, transparent bounded contributions.
     trend = max(-1.0, min(1.0, (close / sma20 - 1) / 0.05))
@@ -48,10 +58,16 @@ def assess_market_bars(bars, source_id):
         "rubric_id": RUBRIC,
         "as_of": normalized[-1][0].isoformat(),
         "source_ids": [source_id],
-        "metrics": {"last_close": close, "sma20": sma20, "return_5_sessions": change5},
+        "metrics": {
+            "last_close": close, "sma20": sma20, "sma50": sma50,
+            "sma200": sma200, "return_5_sessions": change5,
+            "completed_daily_bars": len(normalized),
+        },
         "limitations": [
             "Experimental uncalibrated technical signal",
             "No quote freshness or execution gate verified",
             "Not a certified seven-analyst directional score",
+            *([] if sma50 is not None else ["SMA50 unavailable: fewer than 50 completed daily bars"]),
+            *([] if sma200 is not None else ["SMA200 unavailable: fewer than 200 completed daily bars"]),
         ],
     }
