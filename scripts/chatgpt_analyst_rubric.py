@@ -42,10 +42,22 @@ def assess_numeric_input(analyst, claim, report_record):
     elif not -1 <= direction <= 1:
         reasons.append("direction outside [-1,1]")
     source_ids = claim.get("source_ids")
-    if not isinstance(source_ids, list) or not source_ids or not all(
+    if not isinstance(source_ids, list) or not all(
         isinstance(x, str) and x.strip() for x in source_ids
     ):
-        reasons.append("source event IDs required")
+        source_ids = []
+    provenance = claim.get("source_provenance")
+    provenance_ok = isinstance(provenance, list) and bool(provenance) and all(
+        isinstance(part, dict)
+        and all(isinstance(part.get(k), str) and part[k].strip()
+                for k in ("source_id", "provider", "dataset"))
+        and _aware_time(part.get("as_of"))
+        for part in provenance
+    )
+    if not provenance_ok:
+        reasons.append("timestamped source provenance components required")
+    if analyst in ("flow", "oi") and not source_ids:
+        reasons.append("directional derivative evidence IDs required")
     for key in ("confidence", "quality", "freshness"):
         value = claim.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
