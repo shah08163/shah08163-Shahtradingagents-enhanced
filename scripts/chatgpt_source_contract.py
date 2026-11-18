@@ -85,12 +85,10 @@ def validate_bullflow_pages(
             raise ValueError("Malformed Bullflow page envelope")
         if str(request.get("ticker", "")).upper() != ticker:
             raise ValueError("Bullflow request ticker missing or mismatched")
-        if date_value is not None:
-            if request.get("date") != date_value:
-                raise ValueError("Bullflow page date missing or mismatched")
-        if start is not None:
-            if request.get("from") != start or request.get("to") != end:
-                raise ValueError("Bullflow page range missing or mismatched")
+        if date_value is not None and request.get("date") != date_value:
+            raise ValueError("Bullflow page date missing or mismatched")
+        if start is not None and (request.get("from") != start or request.get("to") != end):
+            raise ValueError("Bullflow page range missing or mismatched")
         filters = {key: value for key, value in request.items()
                    if key not in ("cursor", "link_id")}
         if expected_filters is None:
@@ -209,7 +207,7 @@ def validate_market_bars(bars, *, ticker, source_id, start, end, source_as_of=No
         seen.add(day)
         normalized.append((day, bar))
     normalized.sort(key=lambda item: item[0])
-    if any(a[0] >= b[0] for a, b in zip(normalized, normalized[1:])):
+    if any(a[0] >= b[0] for a, b in zip(normalized, normalized[1:], strict=False)):
         raise ValueError("Market bars are not strictly chronological")
     return {
         "ticker": ticker.upper(),
@@ -300,7 +298,7 @@ def validate_intraday_bars(
         seen.add(key)
         parsed.append((dt, dict(bar)))
     parsed.sort(key=lambda row: row[0])
-    if any(a[0] >= b[0] for a, b in zip(parsed, parsed[1:])):
+    if any(a[0] >= b[0] for a, b in zip(parsed, parsed[1:], strict=False)):
         raise ValueError("Intraday bars are not strictly chronological")
     gaps = sum(
         1 for (a, _), (b, _) in zip(parsed, parsed[1:])
