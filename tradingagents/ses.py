@@ -257,7 +257,8 @@ def score_evidence(
         numerator += piece
         contributions.append(
             AnalystContribution(analyst, item.score, weight, piece, overlap,
-                                weight > 0, item.as_of, item.source_ids)
+                                weight > 0, item.as_of, item.source_ids,
+                                item.source_provenance)
         )
 
     missing = tuple(a for a in ANALYSTS if a not in by_name or
@@ -277,6 +278,109 @@ def score_evidence(
     return EvidenceScore(VERSION, value, classify(value), available_coverage,
                          effective_support, status, missing, tuple(flags),
                          tuple(contributions))
+
+
+
+def score_confidence_weighted_evidence(
+    evidence: Sequence[AnalystEvidence],
+    *,
+    minimum_coverage: float = 0.60,
+) -> dict:
+    """Apply the legacy confidence × quality × freshness weighted average.
+
+    No per-role prior is applied. Explicit source components are overlap-
+    discounted only when event IDs or dependence groups are shared. This is
+    an evidence summary and does not produce the official Shah trade rating.
+    """
+    _unit_interval("minimum_coverage", minimum_coverage)
+    # Reuse SES validation and its provenance-aware overlap computation, but
+    # calculate the legacy no-prior equation below.
+    audit = score_evidence(
+        evidence, required=(), minimum_coverage=0.0, minimum_support=0.0
+    )
+    by_name = {item.analyst: item for item in evidence}
+    contributions = {row.analyst: row for row in audit.contributions}
+    weighted_sum = 0.0
+    total_weight = 0.0
+    scored = 0
+    missing = []
+    rows = []
+    provenance_missing = []
+    for analyst in ANALYSTS:
+        item = by_name.get(analyst)
+        if item is None or item.score is None:
+            missing.append(analyst)
+            rows.append({
+                "analyst": analyst, "direction": None, "effective_weight": 0.0,
+                "weighted_contribution": 0.0, "overlap_adjustment": 1.0,
+                "source_provenance": [],
+            })
+            continue
+        scored += 1
+        audit_row = contributions[analyst]
+        overlap = audit_row.overlap_adjustment
+        weight = item.confidence * item.quality * item.freshness * overlap
+        piece = item.score * weight
+        weighted_sum += piece
+        total_weight += weight
+        if not item.source_provenance:
+            provenance_missing.append(analyst)
+        rows.append({
+            "analyst": analyst,
+            "direction": item.score,
+            "confidence": item.confidence,
+            "data_quality": item.quality,
+            "freshness": item.freshness,
+            "effective_weight": weight,
+            "weighted_contribution": piece,
+            "overlap_adjustment": overlap,
+            "source_ids": list(item.source_ids),
+            "source_provenance": [
+                {
+                    "source_id": source.source_id,
+                    "provider": source.provider,
+                    "dataset": source.dataset,
+                    "as_of": source.as_of,
+                    "weight_share": source.weight_share,
+                    "evidence_ids": list(source.evidence_ids),
+                    "dependence_group": source.dependence_group,
+                }
+                for source in item.source_provenance
+            ],
+        })
+    value = weighted_sum / total_weight if total_weight else None
+    coverage = scored / len(ANALYSTS)
+    if value is None or coverage < minimum_coverage:
+        status = "INSUFFICIENT"
+    elif missing or provenance_missing:
+        status = "PROVISIONAL"
+    else:
+        status = "READY"
+    if value is None:
+        label = "UNAVAILABLE"
+    elif value >= 0.55:
+        label = "Strong Bullish"
+    elif value >= 0.20:
+        label = "Bullish"
+    elif value <= -0.55:
+        label = "Strong Bearish"
+    elif value <= -0.20:
+        label = "Bearish"
+    else:
+        label = "Mixed / Neutral"
+    return {
+        "version": "legacy-confidence-weighted-v1.1",
+        "formula": "sum(direction * confidence * quality * freshness * overlap) / sum(effective_weight)",
+        "value": value,
+        "classification": label,
+        "status": status,
+        "coverage": {"scored": scored, "total": len(ANALYSTS), "fraction": coverage},
+        "missing_analysts": missing,
+        "provenance_missing": provenance_missing,
+        "contributions": rows,
+        "is_official_shah_score": False,
+    }
+
 
 
 def decide_trade(
