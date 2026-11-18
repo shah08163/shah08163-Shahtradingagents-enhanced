@@ -32,8 +32,9 @@ def assess_numeric_input(analyst, claim, report_record):
         return None, ["unknown analyst"]
     if not isinstance(claim, dict) or not isinstance(report_record, dict):
         return None, ["missing structured assessment"]
-    if report_record.get("status") != "VERIFIED":
-        reasons.append("analyst not verified")
+    status = report_record.get("status")
+    if status not in ("VERIFIED", "PARTIAL"):
+        reasons.append("analyst unavailable or invalid status")
     if not _aware_time(report_record.get("as_of")):
         reasons.append("report timestamp missing or timezone-naive")
     direction = claim.get("score")
@@ -73,6 +74,12 @@ def assess_numeric_input(analyst, claim, report_record):
     if (analyst in DIRECTION_BASIS and direction not in (0, None)
             and claim.get("direction_basis") != DIRECTION_BASIS[analyst]):
         reasons.append("unqualified directional evidence")
+    if status == "PARTIAL" and isinstance(claim.get("quality"), (int, float)) and not isinstance(claim.get("quality"), bool):
+        if claim["quality"] > 0.5:
+            reasons.append("PARTIAL analyst quality must be capped at 0.5")
     if reasons:
         return None, sorted(set(reasons))
-    return claim, []
+    accepted = dict(claim)
+    if status == "PARTIAL":
+        accepted["quality"] = min(float(claim["quality"]), 0.5)
+    return accepted, []
