@@ -35,8 +35,11 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             and isinstance(facts, list) and bool(facts)
             and all(isinstance(x, str) and bool(x.strip()) for x in facts)
             and isinstance(limitations, list))
+        requested_status = supplied.get("status")
+        reported_status = ("VERIFIED" if valid else
+            requested_status if requested_status in ("PARTIAL", "UNAVAILABLE") else "PARTIAL")
         records[analyst] = {
-            "status": "VERIFIED" if valid else "PARTIAL",
+            "status": reported_status,
             "as_of": as_of,
             "sources": sources if isinstance(sources, list) else [],
             "evidence": facts if isinstance(facts, list) else [],
@@ -95,22 +98,25 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
     official_score = None
     shah_score_details = None
     scoring_spec_sha = None
-    if complete:
-        for analyst in ANALYSTS:
-            if analyst not in score_claims:
-                score_rejections.setdefault(analyst, ["no valid structured score_input"])
-        if len(score_claims) == len(ANALYSTS):
-            try:
-                shah_score_details = score_official_shah(score_claims)
-                official_score = shah_score_details["value"]
-                scoring_spec_sha = shah_score_details["spec_sha"]
-            except (TypeError, ValueError) as exc:
-                score_rejections["official_shah_score"] = [str(exc)]
+    for analyst in ANALYSTS:
+        if analyst not in score_claims:
+            score_rejections.setdefault(analyst, ["no valid structured score_input"])
+    if score_claims:
+        try:
+            shah_score_details = score_official_shah(
+                score_claims,
+                {name: records[name]["status"] for name in ANALYSTS},
+            )
+            official_score = shah_score_details["value"]
+            scoring_spec_sha = shah_score_details["spec_sha"]
+        except (TypeError, ValueError) as exc:
+            score_rejections["official_shah_score"] = [str(exc)]
     report = {"ticker": ticker.upper().strip(),
         "run_at": run_at or datetime.now(UTC).isoformat(),
         "repository_sha": repository_sha, "analysts": records,
         "complete": complete, "actionable": False, "shah_score": official_score,
         "shah_score_details": shah_score_details,
+        "shah_score_status": shah_score_details["score_status"] if shah_score_details else "UNAVAILABLE",
         "weighted_evidence_score": weighted_evidence_score,
         "score_input_rejections": score_rejections,
         "scoring_spec_sha": scoring_spec_sha, "posture": "NO TRADE",
