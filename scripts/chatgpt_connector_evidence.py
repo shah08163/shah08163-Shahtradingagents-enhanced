@@ -126,15 +126,50 @@ def _response_parts(payload):
     return obj, obj.get("data", obj)
 
 
-def _bars(payload):
+def _bars(payload, *, ticker=None, start=None, end=None, as_of_date=None):
     if payload is None:
         return None
     obj, data = _response_parts(payload)
-    for key in ("bars", "candles", "data"):
-        value = data.get(key) if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return data if isinstance(data, list) else None
+
+    candles = data.get("candles")
+    if isinstance(candles, list):
+        symbol = data.get("symbol")
+        if ticker and str(symbol or "").upper() != ticker.upper():
+            raise ValueError("Schwab history ticker missing or mismatched")
+        if start and data.get("requested_start") != start:
+            raise ValueError("Schwab history start window missing or mismatched")
+        if end and data.get("requested_end") != end:
+            raise ValueError("Schwab history end window missing or mismatched")
+        if not isinstance(data.get("retrieved_at_utc"), str):
+            raise ValueError("Schwab history retrieval timestamp missing")
+        if not as_of_date:
+            raise ValueError("Schwab history needs an analysis session date")
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        normalized = []
+        for candle in candles:
+            stamp = candle.get("datetime") if isinstance(candle, dict) else None
+            if isinstance(stamp, bool) or not isinstance(stamp, (int, float)):
+                raise ValueError("Schwab candle timestamp missing or invalid")
+            seconds = stamp / 1000 if stamp > 100000000000 else stamp
+            point = datetime.fromtimestamp(seconds, tz=ZoneInfo("UTC"))
+            session = point.astimezone(ZoneInfo("America/New_York")).date()
+            normalized.append({
+                **candle,
+                "date": session.isoformat(),
+                "completed": session.isoformat() < as_of_date,
+                "provider_timestamp": point.isoformat(),
+            })
+        return normalized
+
+    for key in ("bars", "data"):
+        value = data.get(key)
         if isinstance(value, list):
             return value
-    return data if isinstance(data, list) else None
+    return None
 
 
 def _source_as_of(payload):
@@ -188,13 +223,24 @@ def map_connector_data(
             }
         else:
             try:
+                try:
+                    normalized_schwab = _bars(
+                        schwab_bars, ticker=ticker, start=start, end=end,
+                        as_of_date=trade_date,
+                    )
+                    schwab_normalization_error = None
+                except (TypeError, ValueError, KeyError) as exc:
+                    normalized_schwab = None
+                    schwab_normalization_error = str(exc)
                 selected = select_market_bars(
-                    _bars(schwab_bars), _bars(alpaca_bars),
+                    normalized_schwab, _bars(alpaca_bars),
                     ticker=ticker, start=start, end=end,
                     schwab_as_of=_source_as_of(schwab_bars),
                     alpaca_as_of=_source_as_of(alpaca_bars),
                     as_of_date=trade_date,
                 )
+                if selected["fallback_used"] and schwab_normalization_error:
+                    selected["fallback_reason"] = schwab_normalization_error
                 evidence["market"] = {
                     "status": "PARTIAL",
                     "as_of": selected["as_of"],
