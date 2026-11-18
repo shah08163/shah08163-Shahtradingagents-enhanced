@@ -408,7 +408,8 @@ def map_connector_data(
             src = f"bullflow:eodGex:{ticker}:{history['first_date']}..{history['last_date']}"
             rec["sources"].append(src)
             rec["source_provenance"].append(_source(
-                src, "Bullflow", "dated_eod_gex_history", history["last_date"],
+                src, "Bullflow", "dated_eod_gex_history", history["as_of"],
+                share=1.0,
                 dependence_group=f"bullflow-eod-gex-history:{ticker}",
             ))
             rec["evidence"].append(
