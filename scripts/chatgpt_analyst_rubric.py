@@ -56,7 +56,13 @@ def assess_numeric_input(analyst, claim, report_record):
     )
     if not provenance_ok:
         reasons.append("timestamped source provenance components required")
-    if analyst in ("flow", "oi") and not source_ids:
+    else:
+        for part in provenance:
+            share = part.get("weight_share", 1.0)
+            if (isinstance(share, bool) or not isinstance(share, (int, float))
+                    or not 0 < share <= 1):
+                reasons.append("source provenance weight_share must be in (0,1]")
+    if analyst in ("flow", "oi") and direction not in (0, None) and not source_ids:
         reasons.append("directional derivative evidence IDs required")
     for key in ("confidence", "quality", "freshness"):
         value = claim.get(key)
