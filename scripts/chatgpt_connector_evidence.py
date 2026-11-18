@@ -4,6 +4,8 @@ This module does not call a network or infer an analyst direction. It unwraps
 ChatGPT tool envelopes, validates date windows/pagination, and emits evidence
 metadata for the native analyst adapters and SES scorer.
 """
+from datetime import date
+
 from scripts.chatgpt_source_contract import (
     select_market_bars,
     unwrap_tool_result,
