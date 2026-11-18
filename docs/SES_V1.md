@@ -148,3 +148,16 @@ Open items: Locate deployed seven-analyst backend and call site; obtain
 timestamped ground-truth outcome datasets; calibration / holdout validation;
 inspect CI outcomes; confirm formal review and release strategy.
 No existing production automation or strategy status has been modified.
+
+
+## Legacy weighted evidence compatibility
+
+The legacy evidence summary is available separately as
+`score_confidence_weighted_evidence`. Its formula is
+`sum(direction × confidence × data quality × freshness × overlap) / sum(effective weights)`,
+with the historical score labels. It does not apply the proposed SES role priors.
+The Native report keeps this field separate from the official `shah_score`;
+it is not a substitute for a verified proprietary rating specification.
+Source overlap is discounted only for shared event IDs or explicit measurement
+groups, using per-source shares for mixed-source roles. Provider name alone is
+not an overlap key.
