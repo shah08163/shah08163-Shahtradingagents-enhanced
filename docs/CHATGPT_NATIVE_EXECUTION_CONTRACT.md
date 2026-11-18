@@ -83,9 +83,16 @@ status: experimental_specification_only
 - Add Bullflow dark-pool prints as non-directional price/size/notional context only. Never infer buyer versus seller intent.
 - Dealer uses current OI-weighted and volume-weighted GEX, VEX, alerts, and dated EOD GEX history when available. Compare spot and timestamps before combining; do not interpolate missing history or present model-derived exposures as actual inventory.
 
+### Application order and derived context
+- Apply date, exact-request-filter, response-window, pagination-cursor, terminal-page, event-date, and duplicate checks before calculating any indicator or score. A failure makes that source unavailable or partial and blocks it from score-bearing use.
+- Use validated Schwab history and chain evidence as the primary market and derivatives evidence. Alpaca IEX may replace price history only after Schwab validation fails; do not silently blend the two histories. Keep chain OI counts separate from quote/IV-usable contracts.
+- Add longer-window Bullflow call and put net-premium change/persistence as separate descriptive features. Keep the source period and filters alongside the features; persistence does not prove opening intent.
+- Summarize paginated dark-pool print counts, reported notional, and reported size as non-directional context. It may explain price/volume context but cannot independently add bullish/bearish score.
+- Compare dated EOD GEX totals across observed sessions and retain gaps. Report the dates, spot context, net exposure changes, and elapsed window; do not call modeled exposure actual dealer inventory.
+
 ### Score provenance and overlap
-- Each scored input records provider, endpoint/dataset, requested window, as-of time, event/snapshot IDs, and source quality. A vendor name alone does not prove independence or dependence.
-- Use component-level provenance shares when a role combines independent and overlapping sources (especially Schwab chain OI versus Bullflow flow/OI/GEX). Apply overlap discounts only to explicitly shared event IDs or explicitly declared shared measurement groups; never discount all evidence from one provider by default.
+- Each score-bearing input records provider, endpoint/dataset, requested window, as-of time, event/snapshot IDs, and source quality. A vendor name alone does not prove independence or dependence.
+- Use component-level provenance shares when a role combines independent and overlapping sources (especially Schwab chain OI versus Bullflow flow/OI/GEX). Apply overlap discounts only to explicitly shared event IDs or explicitly declared shared measurement groups; never discount all evidence from one provider by default. Dark-pool context stays provenance-tracked but outside the directional score.
 - Keep confidence, quality, and freshness factors visible. Preserve the existing evidence-weighted structure and publish every role's effective weight and overlap adjustment. Unknown provenance cannot be called independent.
 - This remains an evidence summary, not a mechanically tradeable signal; role and source coverage stay visible.
 
