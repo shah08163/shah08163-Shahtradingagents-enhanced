@@ -333,10 +333,13 @@ def map_connector_data(
             ])
             oi_record["limitations"].extend(chain["limitations"])
         except (TypeError, ValueError, KeyError) as exc:
-            evidence["oi"] = {
+            oi_record = evidence.setdefault("oi", {
                 "status": "UNAVAILABLE", "as_of": None, "sources": [],
-                "evidence": [], "limitations": [str(exc)],
-            }
+                "source_provenance": [], "evidence": [], "limitations": [],
+            })
+            if oi_record["sources"]:
+                oi_record["status"] = "PARTIAL"
+            oi_record["limitations"].append("Schwab chain unavailable: " + str(exc))
 
 
     if bullflow_oi_pages is not None:
