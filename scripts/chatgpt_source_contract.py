@@ -173,6 +173,25 @@ def validate_bullflow_pages(
 
     if not terminal:
         raise ValueError("Bullflow pages are incomplete; terminal page was not retrieved")
+    if as_of is None:
+        event_times = []
+        for row in rows:
+            stamp = next((row.get(key) for key in (
+                "timestamp", "tradeTimestamp", "trade_timestamp",
+                "trfTimestampMs", "sipTimestampMs",
+            ) if row.get(key) is not None), None)
+            if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+                seconds = stamp / 1000 if stamp > 100000000000 else stamp
+                event_times.append(datetime.fromtimestamp(seconds, tz=ZoneInfo("UTC")))
+            elif isinstance(stamp, str):
+                try:
+                    parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if parsed.tzinfo is not None:
+                    event_times.append(parsed)
+        if event_times:
+            as_of = max(event_times).astimezone(ZoneInfo("UTC")).isoformat()
     return {
         "status": "VERIFIED",
         "ticker": ticker,
