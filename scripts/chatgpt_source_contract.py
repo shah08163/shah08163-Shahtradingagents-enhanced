@@ -108,6 +108,11 @@ def validate_bullflow_pages(
             raise ValueError("Bullflow response range missing or mismatched")
         if request.get("cursor") != expected_cursor:
             raise ValueError("Bullflow pagination cursor discontinuity")
+        current_cursor = request.get("cursor")
+        if current_cursor is not None:
+            if current_cursor in seen_cursors:
+                raise ValueError("Bullflow request cursor repeated")
+            seen_cursors.add(current_cursor)
         if terminal:
             raise ValueError("Pages supplied after terminal hasMore=false")
 
@@ -163,8 +168,6 @@ def validate_bullflow_pages(
             raise ValueError("Bullflow hasMore=true without nextCursor")
         if has_more and next_cursor in seen_cursors:
             raise ValueError("Bullflow pagination cursor repeated")
-        if expected_cursor is not None:
-            seen_cursors.add(expected_cursor)
         if not has_more and next_cursor not in (None, ""):
             raise ValueError("Bullflow terminal page unexpectedly has nextCursor")
         terminal = not has_more
