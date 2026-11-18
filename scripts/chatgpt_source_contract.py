@@ -96,8 +96,8 @@ def validate_bullflow_pages(
             expected_filters = filters
         elif filters != expected_filters:
             raise ValueError("Bullflow request filters changed during pagination")
-        if str(data.get("ticker", "")).upper() != ticker:
-            raise ValueError("Bullflow response ticker missing or mismatched")
+        if data.get("ticker") is not None and str(data["ticker"]).upper() != ticker:
+            raise ValueError("Bullflow response ticker mismatch")
         if date_value is not None:
             if data.get("date") not in (None, date_value):
                 raise ValueError("Bullflow response date mismatch")
