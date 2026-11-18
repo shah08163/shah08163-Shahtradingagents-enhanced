@@ -12,6 +12,7 @@ from tradingagents.ses import AnalystEvidence, SourceProvenance, TradeGate, deci
 from tradingagents.shah_score import score_official_shah
 
 SES_SCORER_BLOB_SHA = "db393dd773f57eaeca3b4f3908b053b0ae3d4aa1"
+SCORER_BLOB_SHA = "9c98c415e1e1c17103a7f9f18cd8c5d83ec6f909"  # legacy import alias
 
 def attach_score(report, numeric_evidence, gates=None):
     result = dict(report)
