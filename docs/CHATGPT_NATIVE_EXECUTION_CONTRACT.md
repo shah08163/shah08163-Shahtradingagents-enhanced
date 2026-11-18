@@ -30,7 +30,7 @@ The ChatGPT orchestrator loads this contract and relevant approved repository ru
 2. Fetch data independently; distinguish trading-date session close, after-hours, and delayed/IEX quotes.
 3. Each analyst returns: status {VERIFIED, PARTIAL, UNAVAILABLE}; as_of; sources; evidence; interpretation; limitations.
 4. Report missing analyst results as UNAVAILABLE; never call a seven-analyst output complete unless all seven pass.
-5. Do not fabricate the existing proprietary Shah score or replace it with a new weighted system. Calculate only against a reviewed, version-pinned scoring specification; otherwise SHAHSCORE=UNAVAILABLE.
+5. Calculate the source-pinned official Shah evidence score only from seven VERIFIED analyst records and seven accepted structured score inputs; otherwise SHAHSCORE=UNAVAILABLE. Keep it separate from the Portfolio Manager's five-tier rating and any SES/readiness score.
 6. Trade posture: actionable only when contemporaneous liquidity, event, market-regime, and risk gates pass. Otherwise WATCH or NO TRADE.
 7. Every output records run date, ticker, repository SHA, each tool/source and snapshot time, successful/failed tools, missing fields and whether the conclusion is executable.
 8. Read-only run should work without the legacy mcp__Shah_TradingAgents__run_trading_research service. That service remains a separate optional compatibility test, never an unannounced requirement.
@@ -97,4 +97,12 @@ status: experimental_specification_only
 - This remains an evidence summary, not a mechanically tradeable signal; role and source coverage stay visible.
 
 
-- The report may include `weighted_evidence_score` using the legacy equation (direction × confidence × quality × freshness, divided by total effective weight), with source-component overlap multipliers. This is an evidence summary and is not the official `shah_score`; keep `shah_score` null until its authoritative scoring specification is independently approved.
+## Official Shah score — pinned legacy evidence weigher
+
+The official numeric score is the legacy seven-role Evidence Weigher from `tradingagents/agents/analysts/evidence_weigher.py`, pinned at commit `393a4539cecc5b19c20f5f80829612cd8abef28a` (source blob `9c98c415e1e1c17103a7f9f18cd8c5d83ec6f909`). This pin is a recorded source snapshot, not proof of which revision was deployed on Render.
+
+For each analyst, direction is in [-1,+1] and base weight is confidence × data quality × freshness. Normalize explicit source-component shares within each analyst. For components with a shared event ID or declared dependence group, proportionally scale their weights so their combined weight is no greater than the strongest single overlapping component; independent components, including independent Schwab chain evidence, retain their full weight. Compute Shah Score as sum(direction × effective weight) / sum(effective weight). Do not apply analyst priors. Render each role's direction, confidence, quality, freshness, base/effective weight, weighted contribution, and overlap adjustment.
+
+Classifications follow the pinned source thresholds: ≥0.55 Strong Bullish; ≥0.20 Bullish; ≤−0.55 Strong Bearish; ≤−0.20 Bearish; otherwise Mixed / Neutral. This is an evidence audit score, not a probability or trade signal. The Portfolio Manager's Buy / Overweight / Hold / Underweight / Sell rating remains a separate judgment.
+
+The native runner requires all seven analyst records to be VERIFIED and all seven numeric inputs to pass the versioned rubric with timestamped provenance; otherwise `shah_score` remains null and the rejection reason is recorded. `weighted_evidence_score` is a legacy comparison field; `ses_score` is a separate prior-weighted readiness diagnostic and neither replaces the official score.
