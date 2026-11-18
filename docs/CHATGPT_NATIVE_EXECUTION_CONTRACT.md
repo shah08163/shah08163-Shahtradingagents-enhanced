@@ -89,3 +89,5 @@ status: experimental_specification_only
 - Keep confidence, quality, and freshness factors visible. Preserve the existing evidence-weighted structure and publish every role's effective weight and overlap adjustment. Unknown provenance cannot be called independent.
 - This remains an evidence summary, not a mechanically tradeable signal; role and source coverage stay visible.
 
+
+- The report may include `weighted_evidence_score` using the legacy equation (direction × confidence × quality × freshness, divided by total effective weight), with source-component overlap multipliers. This is an evidence summary and is not the official `shah_score`; keep `shah_score` null until its authoritative scoring specification is independently approved.
