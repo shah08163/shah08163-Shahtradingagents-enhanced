@@ -121,7 +121,7 @@ def score_official_shah(evidence, role_statuses=None):
         for key, amount in _components(analyst, item.get("source_provenance"), bases[analyst]):
             by_key[key].append((analyst, amount))
 
-    effective = {analyst: 0.0 for analyst in ANALYSTS}
+    effective = dict.fromkeys(ANALYSTS, 0.0)
     for components in by_key.values():
         total = sum(amount for _, amount in components)
         strongest = max((amount for _, amount in components), default=0.0)
