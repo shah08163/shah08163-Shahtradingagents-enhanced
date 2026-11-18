@@ -20,7 +20,9 @@ class ConnectorEvidenceTests(unittest.TestCase):
     def test_schwab_daily_candles_are_normalized(self):
         from datetime import datetime, timezone
 
-        stamp = int(datetime(2026, 10, 28, 13, 30, tzinfo=timezone.utc).timestamp() * 1000)
+        stamp = int(
+            datetime(2026, 10, 28, 13, 30, tzinfo=timezone.utc).timestamp() * 1000
+        )
         payload = {
             "source": "Schwab Market Data API", "symbol": "GOOGL",
             "requested_start": "2026-10-28", "requested_end": "2026-10-28",
