@@ -39,10 +39,14 @@ class ConnectorEvidenceTests(unittest.TestCase):
     def test_premium_persistence_uses_observed_sessions(self):
         from datetime import UTC, datetime
 
-        point = lambda day, hour, calls, puts: {
-            "timestamp": int(datetime(2026, 10, day, hour, 0, tzinfo=UTC).timestamp()),
-            "callsNetPremium": calls, "putsNetPremium": puts,
-        }
+        def point(day, hour, calls, puts):
+            return {
+                "timestamp": int(
+                    datetime(2026, 10, day, hour, 0, tzinfo=UTC).timestamp()
+                ),
+                "callsNetPremium": calls,
+                "putsNetPremium": puts,
+            }
         response = {
             "status": 200,
             "request": {"ticker": "GOOGL", "from": "2026-10-28",
