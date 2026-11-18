@@ -10,6 +10,15 @@ CLAIM = {
     "quality": 0.9,
     "freshness": 0.7,
     "rubric_id": "research-rubric-v1",
+    "source_provenance": [{
+        "source_id": "market:test:2026-10-29",
+        "provider": "Schwab",
+        "dataset": "equity_daily_bars",
+        "as_of": "2026-10-29T01:00:00Z",
+        "weight_share": 1.0,
+        "evidence_ids": ["event-100"],
+        "dependence_group": None,
+    }],
 }
 
 
