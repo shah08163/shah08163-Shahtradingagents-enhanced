@@ -72,6 +72,7 @@ def validate_bullflow_pages(
     terminal = False
     as_of = None
     expected_filters = None
+    seen_cursors = set()
 
     for index, raw in enumerate(pages):
         response = unwrap_tool_result(raw)
@@ -115,6 +116,9 @@ def validate_bullflow_pages(
             page_rows = data.get("alerts")
         if not isinstance(page_rows, list):
             raise ValueError("Bullflow page rows are missing or malformed")
+        reported_count = data.get("count")
+        if reported_count is not None and reported_count != len(page_rows):
+            raise ValueError("Bullflow page count does not match returned rows")
         for row in page_rows:
             if not isinstance(row, dict):
                 raise ValueError("Bullflow row is not an object")
@@ -157,6 +161,10 @@ def validate_bullflow_pages(
             raise ValueError("Bullflow page lacks a boolean hasMore")
         if has_more and (not isinstance(next_cursor, str) or not next_cursor):
             raise ValueError("Bullflow hasMore=true without nextCursor")
+        if has_more and next_cursor in seen_cursors:
+            raise ValueError("Bullflow pagination cursor repeated")
+        if expected_cursor is not None:
+            seen_cursors.add(expected_cursor)
         if not has_more and next_cursor not in (None, ""):
             raise ValueError("Bullflow terminal page unexpectedly has nextCursor")
         terminal = not has_more
