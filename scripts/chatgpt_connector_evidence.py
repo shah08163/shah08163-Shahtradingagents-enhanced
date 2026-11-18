@@ -520,6 +520,8 @@ def map_connector_data(
                 f"contracts_returned={chain['contract_count']}",
                 f"contracts_with_oi={chain['contracts_with_oi']}",
                 f"contracts_quote_iv_usable={chain['contracts_usable_for_quote_iv']}",
+                f"contracts_greeks_usable={chain['contracts_usable_for_greeks']}",
+                f"contracts_adjusted_flags={chain['contracts_with_adjusted_deliverable_flags']}",
                 f"quote_freshness={chain['realtime_delayed']}",
             ])
             oi_record["limitations"].extend(chain["limitations"])
