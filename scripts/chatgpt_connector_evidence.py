@@ -163,7 +163,7 @@ def map_connector_data(
             oi_record["sources"].append(oi_src)
             oi_record["source_provenance"].append(_source(
                 oi_src, "Bullflow", "options_profile_oi_context", prof_data["asOf"],
-                share=0.35,
+                share=0.20,
                 dependence_group=f"bullflow-oi-context:{ticker or prof_data.get('symbol')}:{session}",
             ))
             oi_record["evidence"].append(
@@ -209,11 +209,14 @@ def map_connector_data(
             record["limitations"].append(
                 "Ask/bid execution side is not proof of opening, closing, or trader intent"
             )
+            record["observation_end"] = trade_date
+            record["pagination_complete"] = True
         else:
             evidence.setdefault("flow", {
                 "status": "PARTIAL", "as_of": None, "sources": [],
                 "source_provenance": [], "evidence": [], "limitations": [],
             })["limitations"].append("Historical-flow pagination/date validation failed: " + page_error)
+            evidence["flow"]["pagination_complete"] = False
 
     if bullflow_premium_series is not None:
         if not (ticker and start and end):
@@ -244,6 +247,7 @@ def map_connector_data(
                 f"net_premium_series_rows={series['row_count']} "
                 f"window={series['from']}..{series['to']}"
             )
+            record["observation_end"] = end
         else:
             evidence.setdefault("flow", {
                 "status": "PARTIAL", "as_of": None, "sources": [],
@@ -270,6 +274,8 @@ def map_connector_data(
                 "as_of": dark["as_of"],
                 "rows": dark["row_count"],
                 "pages": dark["page_count"],
+                "pagination_complete": True,
+                "observation_end": end,
                 "limitations": [
                     "Prints provide price/size/notional context only; no buyer/seller side is established"
                 ],
@@ -337,7 +343,7 @@ def map_connector_data(
             record["sources"].append(src)
             record.setdefault("source_provenance", []).append(_source(
                 src, "Bullflow", "recorded_flow_oi_context", oi_pages["as_of"],
-                share=0.35, evidence_ids=event_ids,
+                share=0.15, evidence_ids=event_ids,
                 dependence_group=f"bullflow-flow-session:{ticker}:{trade_date}",
             ))
             record.setdefault("evidence", []).append(
@@ -416,6 +422,7 @@ def map_connector_data(
                 f"dated_eod_gex_sessions={history['sessions']} "
                 f"window={history['first_date']}..{history['last_date']}"
             )
+            rec["observation_end"] = history["last_date"]
             rec["limitations"].append(
                 "Missing GEX dates remain gaps; no interpolation or current-to-historical substitution"
             )
