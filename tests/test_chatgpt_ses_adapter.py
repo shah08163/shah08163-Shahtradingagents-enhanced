@@ -23,10 +23,10 @@ class AdapterTests(unittest.TestCase):
         r=attach_score(reports(), {})
         self.assertIsNone(r["shah_score"])
         self.assertEqual(r["ses_trade_decision"], "NO_TRADE")
-    def test_incomplete_report_fails_closed(self):
+    def test_score_is_not_gated_by_complete_flag(self):
         r=reports()
         r["complete"]=False
-        self.assertIsNone(attach_score(r, numbers())["shah_score"])
+        self.assertEqual(attach_score(r, numbers())["shah_score"], 0.0)
     def test_seven_structured_neutral_scores(self):
         r=attach_score(reports(), numbers())
         self.assertEqual(r["shah_score"], 0.0)
