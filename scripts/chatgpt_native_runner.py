@@ -9,8 +9,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from scripts.validate_chatgpt_research import ANALYSTS, valid_timestamp, validate
 from scripts.chatgpt_analyst_rubric import assess_numeric_input
+from scripts.validate_chatgpt_research import ANALYSTS, valid_timestamp, validate
 from tradingagents.ses import AnalystEvidence, SourceProvenance, score_confidence_weighted_evidence
 
 
