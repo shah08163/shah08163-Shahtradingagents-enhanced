@@ -482,13 +482,28 @@ def validate_range_response(raw, *, ticker, start, end, data_keys=()):
         seen_points.add(identity)
         ordered.append((dt, point))
     ordered.sort(key=lambda pair: pair[0])
+    as_of = data.get("asOf", data.get("as_of"))
+    if as_of is None and ordered:
+        last_stamp = ordered[-1][1].get(
+            "timestamp", ordered[-1][1].get("date", ordered[-1][1].get("tradingDate"))
+        )
+        if isinstance(last_stamp, (int, float)) and not isinstance(last_stamp, bool):
+            seconds = last_stamp / 1000 if last_stamp > 100000000000 else last_stamp
+            as_of = datetime.fromtimestamp(seconds, tz=ZoneInfo("UTC")).isoformat()
+        elif isinstance(last_stamp, str):
+            try:
+                parsed_stamp = datetime.fromisoformat(last_stamp.replace("Z", "+00:00"))
+                if parsed_stamp.tzinfo is not None:
+                    as_of = parsed_stamp.isoformat()
+            except ValueError:
+                pass
     return {
         "status": "VERIFIED",
         "ticker": ticker.upper(),
         "from": start,
         "to": end,
         "row_count": len(ordered),
-        "as_of": data.get("asOf", data.get("as_of")),
+        "as_of": as_of,
         "request": request,
         "metadata": {key: value for key, value in data.items()
                      if key not in ("points", "series", "rows", "data")},
