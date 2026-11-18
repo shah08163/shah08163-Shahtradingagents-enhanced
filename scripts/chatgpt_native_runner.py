@@ -42,9 +42,13 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             "limitations": limitations if isinstance(limitations, list) else ["Malformed limitations"]
         }
         for key in ("source_provenance", "observation_end", "observation_date",
-                    "pagination_complete", "requested_window"):
+                    "pagination_complete", "requested_window", "context_sources"):
             if key in supplied:
                 records[analyst][key] = supplied[key]
+        if analyst == "flow" and isinstance(evidence.get("supplemental"), dict):
+            dark_pool = evidence["supplemental"].get("dark_pool_context")
+            if dark_pool:
+                records[analyst]["context_sources"] = {"dark_pool": dark_pool}
 
     score_inputs = []
     score_rejections = {}
@@ -53,6 +57,9 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
         claim = supplied.get("score_input") if isinstance(supplied, dict) else None
         if claim is None:
             continue
+        if (isinstance(claim, dict) and not claim.get("source_provenance")
+                and isinstance(records[analyst].get("source_provenance"), list)):
+            claim = {**claim, "source_provenance": records[analyst]["source_provenance"]}
         accepted, reasons = assess_numeric_input(analyst, claim, records[analyst])
         if reasons:
             score_rejections[analyst] = reasons
