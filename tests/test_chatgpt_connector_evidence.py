@@ -36,6 +36,31 @@ class ConnectorEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(evidence["market"]["sources"], ["Schwab Cloudflare Web"])
         self.assertIn("completed_daily_bars=1", evidence["market"]["evidence"])
+    def test_premium_persistence_uses_observed_sessions(self):
+        from datetime import UTC, datetime
+
+        point = lambda day, hour, calls, puts: {
+            "timestamp": int(datetime(2026, 10, day, hour, 0, tzinfo=UTC).timestamp()),
+            "callsNetPremium": calls, "putsNetPremium": puts,
+        }
+        response = {
+            "status": 200,
+            "request": {"ticker": "GOOGL", "from": "2026-10-28",
+                        "to": "2026-10-29"},
+            "data": {"ticker": "GOOGL", "from": "2026-10-28",
+                     "to": "2026-10-29", "points": [
+                         point(28, 13, 10, 20), point(28, 20, 12, 18),
+                         point(29, 14, 15, 16),
+                     ]},
+        }
+        evidence = map_connector_data(
+            ticker="GOOGL", start="2026-10-28", end="2026-10-29",
+            bullflow_premium_series=response,
+        )
+        feature = evidence["flow"]["features"]["net_premium_persistence"]
+        self.assertEqual(feature["observed_sessions"], 2)
+        self.assertEqual(feature["calls"]["change_usd"], 3)
+        self.assertFalse(feature["gaps_filled"])
     def test_bullflow_aggregate_is_not_directional_score(self):
         obj={"data":{"tradingDate":"2026-10-28","asOf":"2026-10-29T01:07:04Z",
              "activity":{"totalVolume":278532},
