@@ -18,10 +18,10 @@ class ConnectorEvidenceTests(unittest.TestCase):
         self.assertIsNone(report["shah_score"])
         self.assertFalse(report["actionable"])
     def test_schwab_daily_candles_are_normalized(self):
-        from datetime import datetime, timezone
+        from datetime import UTC, datetime
 
         stamp = int(
-            datetime(2026, 10, 28, 13, 30, tzinfo=timezone.utc).timestamp() * 1000
+            datetime(2026, 10, 28, 13, 30, tzinfo=UTC).timestamp() * 1000
         )
         payload = {
             "source": "Schwab Market Data API", "symbol": "GOOGL",
