@@ -41,8 +41,10 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             "evidence": facts if isinstance(facts, list) else [],
             "limitations": limitations if isinstance(limitations, list) else ["Malformed limitations"]
         }
-        if isinstance(supplied.get("source_provenance"), list):
-            records[analyst]["source_provenance"] = supplied["source_provenance"]
+        for key in ("source_provenance", "observation_end", "observation_date",
+                    "pagination_complete", "requested_window"):
+            if key in supplied:
+                records[analyst][key] = supplied[key]
 
     score_inputs = []
     score_rejections = {}
@@ -68,7 +70,7 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             confidence=accepted["confidence"],
             quality=accepted["quality"],
             freshness=accepted["freshness"],
-            source_ids=tuple(accepted.get("source_ids", ())),
+            source_ids=tuple(accepted.get("source_ids") or ()),
             as_of=accepted.get("as_of"),
             direction_basis=accepted.get("direction_basis", "unspecified"),
             source_provenance=provenance,
