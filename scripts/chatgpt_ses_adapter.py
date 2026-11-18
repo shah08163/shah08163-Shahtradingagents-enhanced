@@ -20,28 +20,42 @@ def attach_score(report, numeric_evidence, gates=None):
     result["shah_score_details"] = None
     result["scoring_spec_sha"] = None
     result["ses_score"] = None
+    result["shah_score_status"] = "UNAVAILABLE"
     result["actionable"] = False
     result["posture"] = "NO TRADE"
     result["ses_status"] = "INSUFFICIENT"
     result["ses_trade_decision"] = "NO_TRADE"
-    if not report.get("complete") or validate(report) or not isinstance(numeric_evidence, dict):
+    if validate(report) or not isinstance(numeric_evidence, dict):
         return result
     rows = []
+    accepted_claims = {}
+    score_rejections = {}
+    role_statuses = {name: report.get("analysts", {}).get(name, {}).get("status", "UNAVAILABLE")
+                     for name in ANALYSTS}
     for name in ANALYSTS:
         item = numeric_evidence.get(name)
         cited = report.get("analysts", {}).get(name, {})
+        if item is None:
+            score_rejections[name] = ["no structured score_input"]
+            continue
         accepted, reasons = assess_numeric_input(name, item, cited)
         if accepted is None:
-            return result
+            score_rejections[name] = reasons
+            continue
+        item = accepted
         direction = item.get("score")
         if isinstance(direction, bool) or not isinstance(direction, (int, float)) or not isfinite(direction) or not -1 <= direction <= 1:
-            return result
+            score_rejections[name] = ["direction outside [-1,1]"]
+            continue
         if not item.get("source_ids") or not cited.get("as_of"):
-            return result
+            score_rejections[name] = ["source IDs or report timestamp missing"]
+            continue
         if name == "flow" and direction != 0 and item.get("direction_basis") != "single_leg_sweep_block":
-            return result
+            score_rejections[name] = ["unqualified directional evidence"]
+            continue
         if name == "oi" and direction != 0 and item.get("direction_basis") != "confirmed_change_plus_flow":
-            return result
+            score_rejections[name] = ["unqualified directional evidence"]
+            continue
         try:
             provenance = tuple(SourceProvenance(
                 source_id=part["source_id"], provider=part["provider"],
@@ -57,19 +71,25 @@ def attach_score(report, numeric_evidence, gates=None):
                 source_ids=tuple(item["source_ids"]), as_of=cited["as_of"],
                 direction_basis=item.get("direction_basis", "unspecified"),
                 source_provenance=provenance))
-        except (KeyError, ValueError, TypeError):
-            return result
-    official_score = score_official_shah({name: numeric_evidence[name] for name in ANALYSTS})
-    ses = score_evidence(rows)
-    decision = decide_trade(ses, gates if isinstance(gates, TradeGate) else TradeGate(), options=True)
-    result["shah_score"] = official_score["value"]
-    result["shah_score_details"] = official_score
-    result["scoring_spec_sha"] = official_score["spec_sha"]
-    result["ses_score"] = ses.value
-    result["ses_scorer_spec_sha"] = SES_SCORER_BLOB_SHA
-    result["ses_status"] = ses.status
-    result["ses_components"] = [asdict(x) for x in ses.contributions]
-    result["ses_trade_decision"] = decision.status
-    result["posture"] = decision.status
+            accepted_claims[name] = item
+        except (KeyError, ValueError, TypeError) as exc:
+            score_rejections[name] = [str(exc)]
+            continue
+    result["score_input_rejections"] = score_rejections
+    if accepted_claims:
+        official_score = score_official_shah(accepted_claims, role_statuses)
+        result["shah_score"] = official_score["value"]
+        result["shah_score_details"] = official_score
+        result["scoring_spec_sha"] = official_score["spec_sha"]
+        result["shah_score_status"] = official_score["score_status"]
+    if len(rows) == len(ANALYSTS) and all(role_statuses[n] == "VERIFIED" for n in ANALYSTS):
+        ses = score_evidence(rows)
+        decision = decide_trade(ses, gates if isinstance(gates, TradeGate) else TradeGate(), options=True)
+        result["ses_score"] = ses.value
+        result["ses_scorer_spec_sha"] = SES_SCORER_BLOB_SHA
+        result["ses_status"] = ses.status
+        result["ses_components"] = [asdict(x) for x in ses.contributions]
+        result["ses_trade_decision"] = decision.status
+        result["posture"] = decision.status
     result["actionable"] = False  # CANDIDATE_FOR_REVIEW is not an order authorization.
     return result
