@@ -42,7 +42,8 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             "limitations": limitations if isinstance(limitations, list) else ["Malformed limitations"]
         }
         for key in ("source_provenance", "observation_end", "observation_date",
-                    "pagination_complete", "requested_window", "context_sources"):
+                    "pagination_complete", "requested_window", "context_sources",
+                    "features"):
             if key in supplied:
                 records[analyst][key] = supplied[key]
         if analyst == "flow" and isinstance(evidence.get("supplemental"), dict):
