@@ -215,6 +215,68 @@ def select_market_bars(
             ) from alpaca_error
 
 
+
+def validate_intraday_bars(
+    bars, *, ticker, source_id, start, end, source_as_of=None,
+):
+    """Validate completed 15-minute bars without filling missing intervals."""
+    if not isinstance(bars, list) or not bars or not source_id:
+        raise ValueError("Completed intraday bars and source provenance are required")
+    if not isinstance(source_as_of, str):
+        raise ValueError("Intraday history requires the source retrieval timestamp")
+    try:
+        retrieved = datetime.fromisoformat(source_as_of.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("Intraday source timestamp is invalid") from exc
+    if retrieved.tzinfo is None:
+        raise ValueError("Intraday source timestamp must be timezone-aware")
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    parsed, seen = [], set()
+    for bar in bars:
+        if not isinstance(bar, dict):
+            raise ValueError("Intraday bar must be an object")
+        stamp = bar.get("timestamp", bar.get("datetime"))
+        if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+            seconds = stamp / 1000 if stamp > 100000000000 else stamp
+            dt = datetime.fromtimestamp(seconds, tz=ZoneInfo("UTC"))
+        elif isinstance(stamp, str):
+            try:
+                dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("Intraday timestamp is invalid") from exc
+            if dt.tzinfo is None:
+                raise ValueError("Intraday timestamp must be timezone-aware")
+        else:
+            raise ValueError("Intraday timestamp is required")
+        day = dt.astimezone(ET).date()
+        if not first <= day <= last or day > retrieved.astimezone(ET).date():
+            raise ValueError("Intraday bar date is outside the requested/as-of window")
+        if bar.get("completed", bar.get("complete")) is not True:
+            raise ValueError("Incomplete 15-minute bars cannot be used")
+        key = dt.isoformat()
+        if key in seen:
+            raise ValueError("Duplicate 15-minute bar timestamp")
+        seen.add(key)
+        parsed.append((dt, dict(bar)))
+    parsed.sort(key=lambda row: row[0])
+    if any(a[0] >= b[0] for a, b in zip(parsed, parsed[1:])):
+        raise ValueError("Intraday bars are not strictly chronological")
+    gaps = sum(
+        1 for (a, _), (b, _) in zip(parsed, parsed[1:])
+        if (b - a).total_seconds() > 15 * 60
+    )
+    return {
+        "ticker": ticker.upper(),
+        "source_id": source_id,
+        "as_of": source_as_of,
+        "start": parsed[0][0].astimezone(ET).isoformat(),
+        "end": parsed[-1][0].astimezone(ET).isoformat(),
+        "bar_count": len(parsed),
+        "gap_count": gaps,
+        "bars": [bar for _, bar in parsed],
+    }
+
+
 def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
     """Keep current chain snapshots out of historical runs; report contract quality."""
     obj = unwrap_tool_result(snapshot)
