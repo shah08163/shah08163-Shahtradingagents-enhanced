@@ -387,8 +387,23 @@ def validate_gex_history(snapshots, *, ticker, trade_date):
         oi_date = data.get("open_interest_date")
         if not isinstance(oi_date, str) or date.fromisoformat(oi_date) > day:
             raise ValueError("GEX history OI date is invalid or postdates snapshot")
-        if not data.get("as_of") or not isinstance(data.get("strikes"), list):
-            raise ValueError("GEX history snapshot lacks timestamp or strike rows")
+        stamp = data.get("as_of")
+        if not isinstance(stamp, str):
+            raise ValueError("GEX history snapshot lacks timestamp")
+        try:
+            stamp_dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("GEX history timestamp is invalid") from exc
+        if stamp_dt.tzinfo is None or stamp_dt.astimezone(ET).date() > day:
+            raise ValueError("GEX history timestamp is naive or postdates its session")
+        strikes = data.get("strikes")
+        if not isinstance(strikes, list) or not strikes:
+            raise ValueError("GEX history snapshot lacks strike rows")
+        for strike_row in strikes:
+            if (not isinstance(strike_row, dict)
+                    or (isinstance(strike_row.get("net_gex"), bool)\n                        or not isinstance(strike_row.get("net_gex"), (int, float))\n                        or not isfinite(strike_row.get("net_gex")))
+                    or (isinstance(strike_row.get("strike"), bool)\n                        or not isinstance(strike_row.get("strike"), (int, float))\n                        or not isfinite(strike_row.get("strike")))):
+                raise ValueError("GEX history contains invalid strike exposure")
         seen.add(day)
         normalized.append(data)
     normalized.sort(key=lambda row: row["date"])
