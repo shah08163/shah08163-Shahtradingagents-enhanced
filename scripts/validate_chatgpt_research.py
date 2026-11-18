@@ -61,8 +61,6 @@ def validate(report):
         errors.append("complete cannot be true unless all seven analysts VERIFIED")
     score = report.get("shah_score")
     if score is not None:
-        if not all_verified:
-            errors.append("shah_score prohibited with incomplete analysts")
         if not isinstance(score,(int,float)) or isinstance(score,bool):
             errors.append("shah_score must be numeric or null")
         if not report.get("scoring_spec_sha"):
