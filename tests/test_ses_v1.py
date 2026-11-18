@@ -137,3 +137,67 @@ def test_lookahead_rejected():
     with pytest.raises(ValueError, match="Lookahead"):
         evaluate_outcomes([Outcome("AAPL", "2026-10-16", "2026-10-17",
                                    "2026-11-16", 0.3, 0.01)])
+
+
+
+def _official_score_input(score=0.8, quality=1.0):
+    return {
+        "score": score,
+        "confidence": 1.0,
+        "quality": quality,
+        "freshness": 1.0,
+        "source_provenance": [{
+            "source_id": "test:source",
+            "provider": "fixture",
+            "dataset": "status_regression",
+            "as_of": "2026-11-18T20:00:00Z",
+            "weight_share": 1.0,
+            "evidence_ids": ["test:event"],
+            "dependence_group": None,
+        }],
+    }
+
+
+def test_official_scorer_caps_partial_quality_and_keeps_role_contributing():
+    from tradingagents.shah_score import score_official_shah
+
+    result = score_official_shah(
+        {"market": _official_score_input(score=0.8, quality=0.9)},
+        {"market": "PARTIAL"},
+    )
+    market = next(row for row in result["contributions"] if row["analyst"] == "market")
+    assert market["status"] == "PARTIAL"
+    assert market["reported_data_quality"] == pytest.approx(0.9)
+    assert market["data_quality"] == pytest.approx(0.5)
+    assert market["base_weight"] == pytest.approx(0.5)
+    assert market["effective_weight"] == pytest.approx(0.5)
+    assert market["weighted_contribution"] == pytest.approx(0.4)
+    assert result["coverage"]["scored_roles"] == 1
+    assert result["score_status"] == "PROVISIONAL"
+
+
+def test_official_scorer_excludes_unavailable_input_at_zero_weight():
+    from tradingagents.shah_score import score_official_shah
+
+    result = score_official_shah(
+        {"market": _official_score_input(score=-1.0, quality=1.0)},
+        {"market": "UNAVAILABLE"},
+    )
+    market = next(row for row in result["contributions"] if row["analyst"] == "market")
+    assert market["status"] == "UNAVAILABLE"
+    assert market["direction"] is None
+    assert market["effective_weight"] == 0.0
+    assert market["weighted_contribution"] == 0.0
+    assert result["coverage"]["scored_roles"] == 0
+    assert result["effective_weight_total"] == 0.0
+    assert result["value"] is None
+
+
+def test_official_scorer_requires_explicit_verified_or_partial_status():
+    from tradingagents.shah_score import score_official_shah
+
+    result = score_official_shah({"market": _official_score_input()})
+    market = next(row for row in result["contributions"] if row["analyst"] == "market")
+    assert market["status"] == "UNAVAILABLE"
+    assert market["effective_weight"] == 0.0
+    assert result["value"] is None
