@@ -52,7 +52,7 @@ def _premium_persistence(rows):
     result = {"status": "PARTIAL", "points": len(points)}
     for key, label in (("callsNetPremium", "calls"), ("putsNetPremium", "puts")):
         values = [float(row[key]) for row in points]
-        deltas = [b - a for a, b in zip(values, values[1:])]
+        deltas = [b - a for a, b in zip(values, values[1:], strict=False)]
         nonzero = [1 if delta > 0 else -1 for delta in deltas if delta != 0]
         result[label] = {
             "first_value_usd": values[0],
