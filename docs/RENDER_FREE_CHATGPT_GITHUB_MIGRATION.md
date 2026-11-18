@@ -110,3 +110,8 @@ Sources used during discovery: Schwab Cloudflare Web, Bullflow Connection, Alpac
 **Run gates:** Seven role records present: yes. All seven VERIFIED: no (Flow VERIFIED, six PARTIAL). ORIGINAL_GRAPH_EXECUTED=false; EXECUTION_PARITY=NOT_CERTIFIED; Render calls: 0; legacy Shah service calls: 0.
 
 **Source links:** [Alphabet Q3 2026 release (SEC)](https://www.sec.gov/Archives/edgar/data/1652044/000165204426000080/googexhibit991q32026.htm); [Alphabet Q3 2026 filing (SEC)](https://www.sec.gov/Archives/edgar/data/1652044/000165204426000084/goog-20260930.htm); [Q3 earnings call (Alphabet IR)](https://abc.xyz/investor/events/event-details/2026/2026-Q3-Earnings-Call-2026-Ujou16CTw9/default.aspx); [Nov. 16 market coverage](https://www.marketwatch.com/data-news/alphabet-inc-cl-c-stock-underperforms-monday-when-compared-to-competitors-ef4f0703-9c7bc4f35f64).
+
+
+## Social analyst implementation decision
+
+The ChatGPT-native Social contract is defined in [CHATGPT_NATIVE_SOCIAL_AGENT.md](CHATGPT_NATIVE_SOCIAL_AGENT.md). ChatGPT owns relevance/stance classification and synthesis for retrieved records; TypeSafe/Jev is not required. Source-native dated counts remain preferred. When only web-search examples are available, Social is PARTIAL and qualitative only—no source-wide ratio, sample denominator, or representativeness claim. If no dated posts can be verified, Social is UNAVAILABLE. This accepted compromise allows the other six analyst roles to proceed and does not certify original graph parity.
