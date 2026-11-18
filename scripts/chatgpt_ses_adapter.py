@@ -76,12 +76,11 @@ def attach_score(report, numeric_evidence, gates=None):
             score_rejections[name] = [str(exc)]
             continue
     result["score_input_rejections"] = score_rejections
-    if accepted_claims:
-        official_score = score_official_shah(accepted_claims, role_statuses)
-        result["shah_score"] = official_score["value"]
-        result["shah_score_details"] = official_score
-        result["scoring_spec_sha"] = official_score["spec_sha"]
-        result["shah_score_status"] = official_score["score_status"]
+    official_score = score_official_shah(accepted_claims, role_statuses)
+    result["shah_score"] = official_score["value"]
+    result["shah_score_details"] = official_score
+    result["scoring_spec_sha"] = official_score["spec_sha"]
+    result["shah_score_status"] = official_score["score_status"]
     if len(rows) == len(ANALYSTS) and all(role_statuses[n] == "VERIFIED" for n in ANALYSTS):
         ses = score_evidence(rows)
         decision = decide_trade(ses, gates if isinstance(gates, TradeGate) else TradeGate(), options=True)
