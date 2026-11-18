@@ -92,15 +92,24 @@ def _label(score):
     return "Mixed / Neutral"
 
 
-def score_official_shah(evidence):
-    """Score all seven structured role claims; incomplete inputs are rejected."""
-    if not isinstance(evidence, dict) or set(evidence) != set(ANALYSTS):
-        raise ValueError("exactly seven structured analyst score inputs required")
+def score_official_shah(evidence, role_statuses=None):
+    """Score accepted structured inputs; absent roles remain visible at zero weight.
+
+    Partial coverage is scoreable. The returned status distinguishes a provisional
+    score from a seven-role fully verified score. Missing roles are never bearish.
+    """
+    if not isinstance(evidence, dict) or not set(evidence).issubset(set(ANALYSTS)):
+        raise ValueError("structured score inputs must use canonical analyst keys")
+    role_statuses = role_statuses or {}
+    if not isinstance(role_statuses, dict):
+        raise ValueError("role_statuses must be an object")
 
     directions = {}
     bases = {}
     by_key = defaultdict(list)
     for analyst in ANALYSTS:
+        if analyst not in evidence:
+            continue
         item = evidence[analyst]
         if not isinstance(item, dict):
             raise ValueError(f"{analyst}: structured score input required")
@@ -109,15 +118,9 @@ def score_official_shah(evidence):
         quality = _number(item.get("quality"), "quality", 0.0, 1.0)
         freshness = _number(item.get("freshness"), "freshness", 0.0, 1.0)
         bases[analyst] = confidence * quality * freshness
-        for key, amount in _components(
-            analyst, item.get("source_provenance"), bases[analyst]
-        ):
+        for key, amount in _components(analyst, item.get("source_provenance"), bases[analyst]):
             by_key[key].append((analyst, amount))
 
-    # If evidence components explicitly overlap, scale just those components
-    # proportionally. Their combined effective weight equals the strongest
-    # single overlapping component, matching the legacy Flow/OI cap when the
-    # whole Flow/OI inputs share one source. Independent components are untouched.
     effective = {analyst: 0.0 for analyst in ANALYSTS}
     for components in by_key.values():
         total = sum(amount for _, amount in components)
@@ -128,24 +131,42 @@ def score_official_shah(evidence):
 
     denominator = sum(effective.values())
     value = (
-        sum(directions[name] * effective[name] for name in ANALYSTS) / denominator
+        sum(directions[name] * effective[name] for name in directions) / denominator
         if denominator > 0 else None
     )
     rows = []
     for analyst in ANALYSTS:
+        status = role_statuses.get(analyst, "VERIFIED" if analyst in evidence else "UNAVAILABLE")
+        if status not in ("VERIFIED", "PARTIAL", "UNAVAILABLE"):
+            status = "UNAVAILABLE"
+        if analyst not in evidence:
+            rows.append({
+                "analyst": analyst, "status": status, "direction": None,
+                "confidence": None, "data_quality": None, "freshness": None,
+                "base_weight": 0.0, "effective_weight": 0.0,
+                "weighted_contribution": 0.0, "overlap_adjustment": 1.0,
+                "source_provenance": [],
+                "exclusion_reason": "No accepted structured score input; excluded, not bearish evidence.",
+            })
+            continue
+        item = evidence[analyst]
         weight = effective[analyst]
         rows.append({
-            "analyst": analyst,
+            "analyst": analyst, "status": status,
             "direction": directions[analyst],
-            "confidence": float(evidence[analyst]["confidence"]),
-            "data_quality": float(evidence[analyst]["quality"]),
-            "freshness": float(evidence[analyst]["freshness"]),
+            "confidence": float(item["confidence"]),
+            "data_quality": float(item["quality"]),
+            "freshness": float(item["freshness"]),
             "base_weight": bases[analyst],
             "effective_weight": weight,
             "weighted_contribution": directions[analyst] * weight,
             "overlap_adjustment": weight / bases[analyst] if bases[analyst] else 1.0,
-            "source_provenance": evidence[analyst]["source_provenance"],
+            "source_provenance": item["source_provenance"],
         })
+    scored_count = len(directions)
+    all_verified = scored_count == len(ANALYSTS) and all(
+        role_statuses.get(name, "VERIFIED") == "VERIFIED" for name in ANALYSTS
+    )
     return {
         "version": "shah-evidence-weigher-provenance-v1",
         "spec_sha": SCORING_SPEC_SHA,
@@ -153,6 +174,16 @@ def score_official_shah(evidence):
         "formula": FORMULA,
         "value": value,
         "classification": _label(value) if value is not None else "UNAVAILABLE",
+        "score_status": "READY" if all_verified and value is not None else (
+            "PROVISIONAL" if value is not None else "UNAVAILABLE"
+        ),
+        "coverage": {
+            "scored_roles": scored_count,
+            "total_roles": len(ANALYSTS),
+            "fraction": scored_count / len(ANALYSTS),
+            "statuses": {name: role_statuses.get(name, "VERIFIED" if name in evidence else "UNAVAILABLE")
+                         for name in ANALYSTS},
+        },
         "effective_weight_total": denominator,
         "contributions": rows,
         "is_official_shah_score": True,
