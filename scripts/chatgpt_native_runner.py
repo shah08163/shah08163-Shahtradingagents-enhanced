@@ -12,6 +12,7 @@ from pathlib import Path
 from scripts.chatgpt_analyst_rubric import assess_numeric_input
 from scripts.validate_chatgpt_research import ANALYSTS, valid_timestamp, validate
 from tradingagents.ses import AnalystEvidence, SourceProvenance, score_confidence_weighted_evidence
+from tradingagents.shah_score import score_official_shah
 
 
 def assemble(ticker, repository_sha, evidence, run_at=None):
@@ -52,6 +53,7 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
                 records[analyst]["context_sources"] = {"dark_pool": dark_pool}
 
     score_inputs = []
+    score_claims = {}
     score_rejections = {}
     for analyst in ANALYSTS:
         supplied = evidence.get(analyst)
@@ -65,6 +67,7 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
         if reasons:
             score_rejections[analyst] = reasons
             continue
+        score_claims[analyst] = accepted
         provenance = tuple(SourceProvenance(
             source_id=part["source_id"], provider=part["provider"],
             dataset=part["dataset"], as_of=part.get("as_of"),
@@ -89,13 +92,28 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
         if score_inputs else None
     )
     complete = all(r["status"] == "VERIFIED" for r in records.values())
+    official_score = None
+    shah_score_details = None
+    scoring_spec_sha = None
+    if complete:
+        for analyst in ANALYSTS:
+            if analyst not in score_claims:
+                score_rejections.setdefault(analyst, ["no valid structured score_input"])
+        if len(score_claims) == len(ANALYSTS):
+            try:
+                shah_score_details = score_official_shah(score_claims)
+                official_score = shah_score_details["value"]
+                scoring_spec_sha = shah_score_details["spec_sha"]
+            except (TypeError, ValueError) as exc:
+                score_rejections["official_shah_score"] = [str(exc)]
     report = {"ticker": ticker.upper().strip(),
         "run_at": run_at or datetime.now(UTC).isoformat(),
         "repository_sha": repository_sha, "analysts": records,
-        "complete": complete, "actionable": False, "shah_score": None,
+        "complete": complete, "actionable": False, "shah_score": official_score,
+        "shah_score_details": shah_score_details,
         "weighted_evidence_score": weighted_evidence_score,
         "score_input_rejections": score_rejections,
-        "scoring_spec_sha": None, "posture": "NO TRADE",
+        "scoring_spec_sha": scoring_spec_sha, "posture": "NO TRADE",
         "certification": "STRUCTURAL_ONLY"}
     errors = validate(report)
     if errors:
