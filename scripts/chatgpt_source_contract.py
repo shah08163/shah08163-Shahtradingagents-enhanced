@@ -295,6 +295,7 @@ def validate_gex_history(snapshots, *, ticker, trade_date):
         "sessions": len(normalized),
         "first_date": normalized[0]["date"],
         "last_date": normalized[-1]["date"],
+        "as_of": normalized[-1]["as_of"],
         "gaps_preserved": True,
         "snapshots": normalized,
     }
