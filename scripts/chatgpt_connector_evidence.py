@@ -32,6 +32,93 @@ def _source(source_id, provider, dataset, as_of, *, share=1.0,
     }
 
 
+def _finite_number(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and value == value and abs(value) != float("inf"))
+
+
+def _premium_persistence(rows):
+    """Summarize observed cumulative call/put series without assigning intent."""
+    points = [
+        row for row in rows
+        if isinstance(row, dict)
+        and _finite_number(row.get("callsNetPremium"))
+        and _finite_number(row.get("putsNetPremium"))
+    ]
+    if len(points) < 2:
+        return {"status": "UNAVAILABLE", "reason": "fewer than two valid premium points"}
+    result = {"status": "PARTIAL", "points": len(points)}
+    for key, label in (("callsNetPremium", "calls"), ("putsNetPremium", "puts")):
+        values = [float(row[key]) for row in points]
+        deltas = [b - a for a, b in zip(values, values[1:])]
+        nonzero = [1 if delta > 0 else -1 for delta in deltas if delta != 0]
+        result[label] = {
+            "first_value_usd": values[0],
+            "last_value_usd": values[-1],
+            "change_usd": values[-1] - values[0],
+            "directional_persistence_fraction": (
+                max(nonzero.count(1), nonzero.count(-1)) / len(nonzero)
+                if nonzero else None
+            ),
+            "nonzero_intervals": len(nonzero),
+        }
+    result["interpretation_limit"] = (
+        "Call and put series are reported separately; persistence is descriptive, "
+        "not proof of opening intent or a directional recommendation"
+    )
+    return result
+
+
+def _darkpool_summary(rows):
+    valid = [row for row in rows if isinstance(row, dict)]
+    notionals = [float(row["notional"]) for row in valid if _finite_number(row.get("notional"))]
+    sizes = [float(row["size"]) for row in valid if _finite_number(row.get("size"))]
+    return {
+        "status": "PARTIAL",
+        "dated_print_count": len(valid),
+        "reported_notional_usd": sum(notionals) if notionals else None,
+        "reported_share_size": sum(sizes) if sizes else None,
+        "prints_with_notional": len(notionals),
+        "prints_with_size": len(sizes),
+        "interpretation_limit": "Non-directional price/size/notional context; no buyer/seller intent is established",
+    }
+
+
+def _gex_history_summary(snapshots):
+    series = []
+    for snapshot in snapshots:
+        rows = snapshot.get("strikes", [])
+        values = [float(row["net_gex"]) for row in rows
+                  if isinstance(row, dict) and _finite_number(row.get("net_gex"))]
+        if not values:
+            continue
+        series.append({
+            "date": snapshot["date"],
+            "net_gex_usd_per_1pct": sum(values),
+            "strike_count": len(values),
+            "spot_price": snapshot.get("spot_price"),
+        })
+    if not series:
+        return {"status": "UNAVAILABLE", "reason": "no valid dated net GEX rows"}
+    result = {"status": "PARTIAL", "observations": series}
+    if len(series) >= 2:
+        first, last = series[0], series[-1]
+        result["window_change"] = {
+            "from_date": first["date"],
+            "to_date": last["date"],
+            "net_gex_change_usd_per_1pct": (
+                last["net_gex_usd_per_1pct"] - first["net_gex_usd_per_1pct"]
+            ),
+            "elapsed_calendar_days": (
+                date.fromisoformat(last["date"]) - date.fromisoformat(first["date"])
+            ).days,
+        }
+        result["interpretation_limit"] = (
+            "Dated model-derived exposure comparison; gaps are retained and values do not establish dealer inventory"
+        )
+    return result
+
+
 def _response_parts(payload):
     obj = _mapping(payload)
     return obj, obj.get("data", obj)
@@ -311,6 +398,7 @@ def map_connector_data(
                 f"net_premium_series_rows={series['row_count']} "
                 f"window={series['from']}..{series['to']}"
             )
+            record.setdefault("features", {})["net_premium_persistence"] = _premium_persistence(series["rows"])
             record["observation_end"] = end
         else:
             evidence.setdefault("flow", {
@@ -340,6 +428,7 @@ def map_connector_data(
                 "pages": dark["page_count"],
                 "pagination_complete": True,
                 "observation_end": end,
+                "features": _darkpool_summary(dark["rows"]),
                 "limitations": [
                     "Prints provide price/size/notional context only; no buyer/seller side is established"
                 ],
@@ -489,6 +578,7 @@ def map_connector_data(
                 f"dated_eod_gex_sessions={history['sessions']} "
                 f"window={history['first_date']}..{history['last_date']}"
             )
+            rec.setdefault("features", {})["historical_gex_changes"] = _gex_history_summary(history["snapshots"])
             rec["observation_end"] = history["last_date"]
             rec["limitations"].append(
                 "Missing GEX dates remain gaps; no interpolation or current-to-historical substitution"
