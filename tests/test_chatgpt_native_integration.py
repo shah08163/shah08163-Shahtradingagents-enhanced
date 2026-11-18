@@ -21,7 +21,7 @@ class ChatGPTNativeIntegrationTests(unittest.TestCase):
         self.assertFalse(report["complete"])
         self.assertIsNone(report["shah_score"])
         self.assertEqual(report["posture"], "NO TRADE")
-        self.assertEqual(report["analysts"]["social"]["status"], "PARTIAL")
+        self.assertEqual(report["analysts"]["social"]["status"], "UNAVAILABLE")
         self.assertEqual(validate(report), [])
 
     def test_ses_requires_numeric_evidence_not_text(self):
