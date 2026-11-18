@@ -230,8 +230,13 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
     stamp = underlying.get("retrieval_timestamp") or underlying.get("provider_quote_timestamp")
     snapshot_day = _as_date(stamp)
     target = date.fromisoformat(trade_date)
-    if snapshot_day is None or snapshot_day != target:
-        raise ValueError("Current Schwab chain cannot be used for a different historical date")
+    provider_day = _as_date(underlying.get("provider_quote_timestamp"))
+    if snapshot_day is None or snapshot_day > target:
+        raise ValueError("Schwab chain is missing an as-of time or postdates the requested session")
+    stale_snapshot = snapshot_day < target or (provider_day is not None and provider_day < target)
+    quote_age = underlying.get("quote_age_seconds")
+    if isinstance(quote_age, (int, float)) and quote_age > 900:
+        stale_snapshot = True
     usable = 0
     oi_rows = 0
     stale = 0
@@ -252,10 +257,12 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
                 and isfinite(iv) and 0 < iv < 500):
             usable += 1
     return {
-        "status": "VERIFIED" if usable else "PARTIAL",
+        "status": "VERIFIED" if usable and not stale_snapshot else "PARTIAL",
         "source": obj.get("source", "Schwab Market Data API"),
         "ticker": ticker.upper(),
         "as_of": stamp,
+        "snapshot_session_date": snapshot_day.isoformat(),
+        "stale_snapshot": stale_snapshot,
         "contract_count": len(contracts),
         "contracts_with_oi": oi_rows,
         "contracts_usable_for_quote_iv": usable,
@@ -264,6 +271,7 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
         "limitations": [
             "OI snapshot is not opening/closing intent or an OI change.",
             "Contract quote/IV usability is filtered independently from OI counts.",
+            *(["Schwab snapshot predates the requested research date; freshness is reduced"] if stale_snapshot else []),
         ],
     }
 
