@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from scripts.validate_chatgpt_research import ANALYSTS, valid_timestamp, validate
+from scripts.chatgpt_analyst_rubric import assess_numeric_input
+from tradingagents.ses import AnalystEvidence, SourceProvenance, score_confidence_weighted_evidence
 
 
 def assemble(ticker, repository_sha, evidence, run_at=None):
@@ -39,11 +41,50 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
             "evidence": facts if isinstance(facts, list) else [],
             "limitations": limitations if isinstance(limitations, list) else ["Malformed limitations"]
         }
+        if isinstance(supplied.get("source_provenance"), list):
+            records[analyst]["source_provenance"] = supplied["source_provenance"]
+
+    score_inputs = []
+    score_rejections = {}
+    for analyst in ANALYSTS:
+        supplied = evidence.get(analyst)
+        claim = supplied.get("score_input") if isinstance(supplied, dict) else None
+        if claim is None:
+            continue
+        accepted, reasons = assess_numeric_input(analyst, claim, records[analyst])
+        if reasons:
+            score_rejections[analyst] = reasons
+            continue
+        provenance = tuple(SourceProvenance(
+            source_id=part["source_id"], provider=part["provider"],
+            dataset=part["dataset"], as_of=part.get("as_of"),
+            weight_share=part.get("weight_share", 1.0),
+            evidence_ids=tuple(part.get("evidence_ids", ())),
+            dependence_group=part.get("dependence_group"),
+        ) for part in accepted.get("source_provenance", []))
+        score_inputs.append(AnalystEvidence(
+            analyst=analyst,
+            score=accepted["score"],
+            confidence=accepted["confidence"],
+            quality=accepted["quality"],
+            freshness=accepted["freshness"],
+            source_ids=tuple(accepted.get("source_ids", ())),
+            as_of=accepted.get("as_of"),
+            direction_basis=accepted.get("direction_basis", "unspecified"),
+            source_provenance=provenance,
+        ))
+
+    weighted_evidence_score = (
+        score_confidence_weighted_evidence(score_inputs)
+        if score_inputs else None
+    )
     complete = all(r["status"] == "VERIFIED" for r in records.values())
     report = {"ticker": ticker.upper().strip(),
         "run_at": run_at or datetime.now(UTC).isoformat(),
         "repository_sha": repository_sha, "analysts": records,
         "complete": complete, "actionable": False, "shah_score": None,
+        "weighted_evidence_score": weighted_evidence_score,
+        "score_input_rejections": score_rejections,
         "scoring_spec_sha": None, "posture": "NO TRADE",
         "certification": "STRUCTURAL_ONLY"}
     errors = validate(report)
