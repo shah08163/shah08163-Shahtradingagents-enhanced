@@ -145,12 +145,17 @@ def _provenance_overlap_factors(by_name):
             keys = [("event", event_id) for event_id in part.evidence_ids if event_id]
             if part.dependence_group:
                 keys.append(("group", part.dependence_group))
-            penalties = [
-                1.0 / len(memberships[key])
-                for key in set(keys)
-                if len(memberships.get(key, ())) > 1
-            ]
-            part_factor = min(penalties) if penalties else 1.0
+            if part.dependence_group:
+                group_key = ("group", part.dependence_group)
+                group_members = memberships.get(group_key, ())
+                part_factor = 1.0 / len(group_members) if len(group_members) > 1 else 1.0
+            else:
+                event_ids = tuple(dict.fromkeys(part.evidence_ids))
+                event_factors = []
+                for event_id in event_ids:
+                    members = memberships.get(("event", event_id), ())
+                    event_factors.append(1.0 / len(members) if len(members) > 1 else 1.0)
+                part_factor = sum(event_factors) / len(event_factors) if event_factors else 1.0
             numerator += part.weight_share * part_factor
         factors[analyst] = numerator / total_share if total_share else 1.0
     return factors
