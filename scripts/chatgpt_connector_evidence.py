@@ -4,7 +4,8 @@ This module does not call a network or infer an analyst direction. It unwraps
 ChatGPT tool envelopes, validates date windows/pagination, and emits evidence
 metadata for the native analyst adapters and SES scorer.
 """
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from scripts.chatgpt_source_contract import (
     select_market_bars,
@@ -40,18 +41,43 @@ def _finite_number(value):
 
 
 def _premium_persistence(rows):
-    """Summarize observed cumulative call/put series without assigning intent."""
-    points = [
-        row for row in rows
-        if isinstance(row, dict)
-        and _finite_number(row.get("callsNetPremium"))
-        and _finite_number(row.get("putsNetPremium"))
-    ]
-    if len(points) < 2:
-        return {"status": "UNAVAILABLE", "reason": "fewer than two valid premium points"}
-    result = {"status": "PARTIAL", "points": len(points)}
+    """Measure cumulative call/put persistence across observed sessions."""
+    by_session = {}
+    et = ZoneInfo("America/New_York")
+    for row in rows:
+        if not (isinstance(row, dict)
+                and _finite_number(row.get("callsNetPremium"))
+                and _finite_number(row.get("putsNetPremium"))):
+            continue
+        stamp = row.get("timestamp")
+        try:
+            if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+                seconds = stamp / 1000 if stamp > 100000000000 else stamp
+                observed = datetime.fromtimestamp(seconds, tz=et)
+            elif isinstance(stamp, str):
+                observed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                if observed.tzinfo is None:
+                    continue
+                observed = observed.astimezone(et)
+            else:
+                continue
+        except (OverflowError, OSError, ValueError):
+            continue
+        # Keep the last cumulative reading of each observed session; never fill gaps.
+        by_session[observed.date().isoformat()] = row
+    sessions = sorted(by_session.items())
+    if len(sessions) < 2:
+        return {"status": "UNAVAILABLE", "reason": "fewer than two dated sessions"}
+    result = {
+        "status": "PARTIAL",
+        "observed_sessions": len(sessions),
+        "first_session": sessions[0][0],
+        "last_session": sessions[-1][0],
+        "raw_point_count": len(rows),
+        "gaps_filled": False,
+    }
     for key, label in (("callsNetPremium", "calls"), ("putsNetPremium", "puts")):
-        values = [float(row[key]) for row in points]
+        values = [float(row[key]) for _, row in sessions]
         deltas = [b - a for a, b in zip(values, values[1:], strict=False)]
         nonzero = [1 if delta > 0 else -1 for delta in deltas if delta != 0]
         result[label] = {
@@ -62,7 +88,7 @@ def _premium_persistence(rows):
                 max(nonzero.count(1), nonzero.count(-1)) / len(nonzero)
                 if nonzero else None
             ),
-            "nonzero_intervals": len(nonzero),
+            "nonzero_session_intervals": len(nonzero),
         }
     result["interpretation_limit"] = (
         "Call and put series are reported separately; persistence is descriptive, "
