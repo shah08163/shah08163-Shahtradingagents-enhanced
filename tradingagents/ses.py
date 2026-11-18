@@ -27,6 +27,18 @@ DERIVATIVE_ANALYSTS = frozenset({"flow", "oi", "dealer"})
 
 
 @dataclass(frozen=True)
+class SourceProvenance:
+    """One scored evidence component with explicit source and overlap identity."""
+    source_id: str
+    provider: str
+    dataset: str
+    as_of: str | None = None
+    weight_share: float = 1.0
+    evidence_ids: tuple[str, ...] = ()
+    dependence_group: str | None = None
+
+
+@dataclass(frozen=True)
 class AnalystEvidence:
     analyst: str
     score: float | None
@@ -43,6 +55,9 @@ class AnalystEvidence:
     # Migration bridge for a completed historical report; never fit a new run
     # to an expected historical score by selecting overrides.
     historical_effective_weight: float | None = None
+    # Components allow a mixed-source role (for example Schwab chain plus
+    # Bullflow event context) to receive overlap discounts only on shared parts.
+    source_provenance: tuple[SourceProvenance, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,6 +70,7 @@ class AnalystContribution:
     included: bool
     as_of: str | None
     source_ids: tuple[str, ...]
+    source_provenance: tuple[SourceProvenance, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -107,6 +123,39 @@ def classify(value: float | None) -> str:
     return "STRONG_BULLISH"
 
 
+def _provenance_overlap_factors(by_name):
+    """Compute symmetric, component-level discounts only for explicit overlap."""
+    memberships = {}
+    for analyst, item in by_name.items():
+        if analyst not in DERIVATIVE_ANALYSTS:
+            continue
+        for source in item.source_provenance:
+            keys = [("event", event_id) for event_id in source.evidence_ids if event_id]
+            if source.dependence_group:
+                keys.append(("group", source.dependence_group))
+            for key in keys:
+                memberships.setdefault(key, set()).add(analyst)
+    factors = {}
+    for analyst, item in by_name.items():
+        if not item.source_provenance:
+            continue
+        total_share = sum(part.weight_share for part in item.source_provenance)
+        numerator = 0.0
+        for part in item.source_provenance:
+            keys = [("event", event_id) for event_id in part.evidence_ids if event_id]
+            if part.dependence_group:
+                keys.append(("group", part.dependence_group))
+            penalties = [
+                1.0 / len(memberships[key])
+                for key in set(keys)
+                if len(memberships.get(key, ())) > 1
+            ]
+            part_factor = min(penalties) if penalties else 1.0
+            numerator += part.weight_share * part_factor
+        factors[analyst] = numerator / total_share if total_share else 1.0
+    return factors
+
+
 def score_evidence(
     evidence: Sequence[AnalystEvidence],
     *,
@@ -147,8 +196,22 @@ def score_evidence(
                 raise ValueError("Directional flow requires qualifying single-leg SWEEP/BLOCK")
             if item.analyst == "oi" and item.direction_basis != "confirmed_change_plus_flow":
                 raise ValueError("Directional OI requires verified OI change plus single-leg flow")
+        if item.source_provenance:
+            shares = 0.0
+            for source in item.source_provenance:
+                if not all(isinstance(x, str) and x.strip()
+                           for x in (source.source_id, source.provider, source.dataset)):
+                    raise ValueError("Source provenance requires source_id, provider, and dataset")
+                _unit_interval("source weight_share", source.weight_share)
+                shares += source.weight_share
+                if any(not isinstance(event_id, str) or not event_id.strip()
+                       for event_id in source.evidence_ids):
+                    raise ValueError("Evidence IDs must be nonempty strings")
+            if shares <= 0:
+                raise ValueError("Source provenance weight shares must sum above zero")
         by_name[item.analyst] = item
 
+    provenance_factors = _provenance_overlap_factors(by_name)
     seen_derivatives: set[str] = set()
     contributions = []
     flags = []
@@ -161,11 +224,18 @@ def score_evidence(
             contributions.append(
                 AnalystContribution(analyst, None, 0.0, 0.0, 1.0, False,
                                     item.as_of if item else None,
-                                    item.source_ids if item else ())
+                                    item.source_ids if item else (),
+                                    item.source_provenance if item else ())
             )
             continue
         shared_raw_ids = set(item.source_ids) & seen_derivatives
-        auto_overlap = 0.50 if analyst in DERIVATIVE_ANALYSTS and shared_raw_ids else 1.0
+        if item.source_provenance:
+            # Provider identity alone is not evidence overlap. Only explicit
+            # shared event IDs or dependence groups discount a component.
+            auto_overlap = provenance_factors.get(analyst, 1.0)
+        else:
+            # Backward-compatible migration path for legacy event-ID inputs.
+            auto_overlap = 0.50 if analyst in DERIVATIVE_ANALYSTS and shared_raw_ids else 1.0
         overlap = min(item.overlap_multiplier, auto_overlap)
         weight = (
             item.historical_effective_weight
@@ -177,6 +247,8 @@ def score_evidence(
             seen_derivatives.update(item.source_ids)
         if item.as_of is None:
             flags.append(f"{analyst}:as_of_missing")
+        if not item.source_provenance:
+            flags.append(f"{analyst}:source_provenance_missing")
         if item.historical_effective_weight is not None:
             flags.append(f"{analyst}:historical_weight_override")
         available_prior += BASE_WEIGHTS[analyst] if weight > 0 else 0
