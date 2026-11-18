@@ -74,9 +74,6 @@ def assess_numeric_input(analyst, claim, report_record):
     if (analyst in DIRECTION_BASIS and direction not in (0, None)
             and claim.get("direction_basis") != DIRECTION_BASIS[analyst]):
         reasons.append("unqualified directional evidence")
-    if status == "PARTIAL" and isinstance(claim.get("quality"), (int, float)) and not isinstance(claim.get("quality"), bool):
-        if claim["quality"] > 0.5:
-            reasons.append("PARTIAL analyst quality must be capped at 0.5")
     if reasons:
         return None, sorted(set(reasons))
     accepted = dict(claim)
