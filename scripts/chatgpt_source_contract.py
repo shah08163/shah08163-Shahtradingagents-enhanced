@@ -339,8 +339,10 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
     if isinstance(quote_age, (int, float)) and quote_age > 900:
         stale_snapshot = True
     usable = 0
+    usable_greeks = 0
     oi_rows = 0
     stale = 0
+    adjusted_flags = 0
     for row in contracts:
         if not isinstance(row, dict):
             continue
@@ -350,13 +352,28 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
         age = row.get("quote_age_seconds")
         quality = str(row.get("quality_issues", "")).lower()
         iv = row.get("implied_volatility_pct")
+        bid, ask = row.get("bid"), row.get("ask")
+        if "adjusted deliverable" in quality:
+            adjusted_flags += 1
         if isinstance(age, (int, float)) and age > 900:
             stale += 1
-        if (isinstance(age, (int, float)) and age <= 900
-                and "adjusted deliverable" not in quality
-                and isinstance(iv, (int, float)) and not isinstance(iv, bool)
-                and isfinite(iv) and 0 < iv < 500):
+        fresh = isinstance(age, (int, float)) and age <= 900
+        valid_iv = (isinstance(iv, (int, float)) and not isinstance(iv, bool)
+                    and isfinite(iv) and 0 < iv < 500)
+        valid_market = (
+            isinstance(bid, (int, float)) and not isinstance(bid, bool)
+            and isfinite(bid) and bid >= 0
+            and isinstance(ask, (int, float)) and not isinstance(ask, bool)
+            and isfinite(ask) and ask > 0 and ask >= bid
+        )
+        if fresh and valid_iv and valid_market:
             usable += 1
+        greek_values = [row.get(key) for key in ("delta", "gamma", "theta", "vega")]
+        if (fresh and valid_market and all(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                and isfinite(value) for value in greek_values
+        )):
+            usable_greeks += 1
     return {
         "status": "VERIFIED" if usable and not stale_snapshot else "PARTIAL",
         "source": obj.get("source", "Schwab Market Data API"),
@@ -367,11 +384,14 @@ def validate_schwab_chain(snapshot, *, ticker, trade_date, max_dte=60):
         "contract_count": len(contracts),
         "contracts_with_oi": oi_rows,
         "contracts_usable_for_quote_iv": usable,
+        "contracts_usable_for_greeks": usable_greeks,
+        "contracts_with_adjusted_deliverable_flags": adjusted_flags,
         "stale_contracts": stale,
         "realtime_delayed": underlying.get("realtime_delayed", "unknown"),
         "limitations": [
             "OI snapshot is not opening/closing intent or an OI change.",
-            "Contract quote/IV usability is filtered independently from OI counts.",
+            "Contract quote/IV usability is measured from fresh valid quotes and reported IV; OI counts remain separate.",
+            "Adjusted-deliverable warnings remain visible because they can affect intrinsic value and strategy selection.",
             *(["Schwab snapshot predates the requested research date; freshness is reduced"] if stale_snapshot else []),
         ],
     }
