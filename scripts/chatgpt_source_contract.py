@@ -150,7 +150,7 @@ def validate_bullflow_pages(
     }
 
 
-def validate_market_bars(bars, *, ticker, source_id, start, end):
+def validate_market_bars(bars, *, ticker, source_id, start, end, source_as_of=None):
     """Validate normalized completed daily bars; caller preserves raw source response."""
     if not isinstance(bars, list) or not bars or not source_id:
         raise ValueError("Market bars and source provenance are required")
@@ -179,6 +179,7 @@ def validate_market_bars(bars, *, ticker, source_id, start, end):
         "start": normalized[0][0].isoformat(),
         "end": normalized[-1][0].isoformat(),
         "bar_count": len(normalized),
+        "as_of": source_as_of or normalized[-1][1].get("provider_timestamp"),
         "bars": [row for _, row in normalized],
     }
 
@@ -187,12 +188,14 @@ def select_market_bars(
     schwab_bars, alpaca_bars, *, ticker, start, end,
     schwab_source="Schwab Cloudflare Web",
     alpaca_source="Alpaca IEX",
+    schwab_as_of=None,
+    alpaca_as_of=None,
 ):
     """Schwab is primary; use Alpaca only when Schwab data fails validation."""
     try:
         chosen = validate_market_bars(
             schwab_bars, ticker=ticker, source_id=schwab_source,
-            start=start, end=end,
+            start=start, end=end, source_as_of=schwab_as_of,
         )
         chosen["fallback_used"] = False
         return chosen
@@ -200,7 +203,7 @@ def select_market_bars(
         try:
             chosen = validate_market_bars(
                 alpaca_bars, ticker=ticker, source_id=alpaca_source,
-                start=start, end=end,
+                start=start, end=end, source_as_of=alpaca_as_of,
             )
             chosen["fallback_used"] = True
             chosen["fallback_reason"] = str(schwab_error)
