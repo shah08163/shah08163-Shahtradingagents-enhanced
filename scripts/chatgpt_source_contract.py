@@ -400,9 +400,13 @@ def validate_gex_history(snapshots, *, ticker, trade_date):
         if not isinstance(strikes, list) or not strikes:
             raise ValueError("GEX history snapshot lacks strike rows")
         for strike_row in strikes:
-            if (not isinstance(strike_row, dict)
-                    or (isinstance(strike_row.get("net_gex"), bool)\n                        or not isinstance(strike_row.get("net_gex"), (int, float))\n                        or not isfinite(strike_row.get("net_gex")))
-                    or (isinstance(strike_row.get("strike"), bool)\n                        or not isinstance(strike_row.get("strike"), (int, float))\n                        or not isfinite(strike_row.get("strike")))):
+            if not isinstance(strike_row, dict):
+                raise ValueError("GEX history contains invalid strike exposure")
+            net_gex = strike_row.get("net_gex")
+            strike = strike_row.get("strike")
+            if (isinstance(net_gex, bool) or not isinstance(net_gex, (int, float))
+                    or not isfinite(net_gex) or isinstance(strike, bool)
+                    or not isinstance(strike, (int, float)) or not isfinite(strike)):
                 raise ValueError("GEX history contains invalid strike exposure")
         seen.add(day)
         normalized.append(data)
