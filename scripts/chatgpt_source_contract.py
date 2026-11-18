@@ -71,6 +71,7 @@ def validate_bullflow_pages(
     duplicates = 0
     terminal = False
     as_of = None
+    expected_filters = None
 
     for index, raw in enumerate(pages):
         response = unwrap_tool_result(raw)
@@ -89,6 +90,21 @@ def validate_bullflow_pages(
         if start is not None:
             if request.get("from") != start or request.get("to") != end:
                 raise ValueError("Bullflow page range missing or mismatched")
+        filters = {key: value for key, value in request.items()
+                   if key not in ("cursor", "link_id")}
+        if expected_filters is None:
+            expected_filters = filters
+        elif filters != expected_filters:
+            raise ValueError("Bullflow request filters changed during pagination")
+        if str(data.get("ticker", "")).upper() != ticker:
+            raise ValueError("Bullflow response ticker missing or mismatched")
+        if date_value is not None:
+            if data.get("date") not in (None, date_value):
+                raise ValueError("Bullflow response date mismatch")
+            if data.get("from") not in (None, date_value) or data.get("to") not in (None, date_value):
+                raise ValueError("Bullflow response session range mismatch")
+        if start is not None and (data.get("from") != start or data.get("to") != end):
+            raise ValueError("Bullflow response range missing or mismatched")
         if request.get("cursor") != expected_cursor:
             raise ValueError("Bullflow pagination cursor discontinuity")
         if terminal:
@@ -438,5 +454,8 @@ def validate_range_response(raw, *, ticker, start, end, data_keys=()):
         "to": end,
         "row_count": len(ordered),
         "as_of": data.get("asOf", data.get("as_of")),
+        "request": request,
+        "metadata": {key: value for key, value in data.items()
+                     if key not in ("points", "series", "rows", "data")},
         "rows": [point for _, point in ordered],
     }
