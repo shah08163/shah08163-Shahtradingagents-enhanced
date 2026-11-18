@@ -93,32 +93,50 @@ def _label(score):
 
 
 def score_official_shah(evidence, role_statuses=None):
-    """Score accepted structured inputs; absent roles remain visible at zero weight.
+    """Score structured inputs while enforcing role status and partial-quality rules.
 
-    Partial coverage is scoreable. The returned status distinguishes a provisional
-    score from a seven-role fully verified score. Missing roles are never bearish.
+    Only explicitly VERIFIED or PARTIAL roles may contribute. PARTIAL quality is
+    capped at 0.50 here, inside the core scorer. Missing, UNAVAILABLE, and invalid
+    statuses receive visible zero-weight rows and never count as bearish evidence.
     """
     if not isinstance(evidence, dict) or not set(evidence).issubset(set(ANALYSTS)):
         raise ValueError("structured score inputs must use canonical analyst keys")
-    role_statuses = role_statuses or {}
+    if role_statuses is None:
+        role_statuses = {}
     if not isinstance(role_statuses, dict):
         raise ValueError("role_statuses must be an object")
 
+    statuses = {}
+    for analyst in ANALYSTS:
+        supplied_status = role_statuses.get(analyst, "UNAVAILABLE")
+        statuses[analyst] = (
+            supplied_status
+            if supplied_status in ("VERIFIED", "PARTIAL", "UNAVAILABLE")
+            else "UNAVAILABLE"
+        )
+
     directions = {}
     bases = {}
+    accepted_quality = {}
+    reported_quality = {}
     by_key = defaultdict(list)
     for analyst in ANALYSTS:
-        if analyst not in evidence:
+        item = evidence.get(analyst)
+        if item is None or statuses[analyst] == "UNAVAILABLE":
             continue
-        item = evidence[analyst]
         if not isinstance(item, dict):
             raise ValueError(f"{analyst}: structured score input required")
-        directions[analyst] = _number(item.get("score"), "direction", -1.0, 1.0)
+        direction = _number(item.get("score"), "direction", -1.0, 1.0)
         confidence = _number(item.get("confidence"), "confidence", 0.0, 1.0)
-        quality = _number(item.get("quality"), "quality", 0.0, 1.0)
+        original_quality = _number(item.get("quality"), "quality", 0.0, 1.0)
+        quality = min(original_quality, 0.50) if statuses[analyst] == "PARTIAL" else original_quality
         freshness = _number(item.get("freshness"), "freshness", 0.0, 1.0)
-        bases[analyst] = confidence * quality * freshness
-        for key, amount in _components(analyst, item.get("source_provenance"), bases[analyst]):
+        base_weight = confidence * quality * freshness
+        directions[analyst] = direction
+        bases[analyst] = base_weight
+        accepted_quality[analyst] = quality
+        reported_quality[analyst] = original_quality
+        for key, amount in _components(analyst, item.get("source_provenance"), base_weight):
             by_key[key].append((analyst, amount))
 
     effective = dict.fromkeys(ANALYSTS, 0.0)
@@ -136,26 +154,29 @@ def score_official_shah(evidence, role_statuses=None):
     )
     rows = []
     for analyst in ANALYSTS:
-        status = role_statuses.get(analyst, "VERIFIED" if analyst in evidence else "UNAVAILABLE")
-        if status not in ("VERIFIED", "PARTIAL", "UNAVAILABLE"):
-            status = "UNAVAILABLE"
-        if analyst not in evidence:
+        status = statuses[analyst]
+        item = evidence.get(analyst)
+        if analyst not in directions:
+            reason = (
+                "Role status is UNAVAILABLE or invalid; excluded, not bearish evidence."
+                if status == "UNAVAILABLE"
+                else "No accepted structured score input; excluded, not bearish evidence."
+            )
             rows.append({
                 "analyst": analyst, "status": status, "direction": None,
-                "confidence": None, "data_quality": None, "freshness": None,
-                "base_weight": 0.0, "effective_weight": 0.0,
+                "confidence": None, "data_quality": None, "reported_data_quality": None,
+                "freshness": None, "base_weight": 0.0, "effective_weight": 0.0,
                 "weighted_contribution": 0.0, "overlap_adjustment": 1.0,
-                "source_provenance": [],
-                "exclusion_reason": "No accepted structured score input; excluded, not bearish evidence.",
+                "source_provenance": [], "exclusion_reason": reason,
             })
             continue
-        item = evidence[analyst]
         weight = effective[analyst]
         rows.append({
             "analyst": analyst, "status": status,
             "direction": directions[analyst],
             "confidence": float(item["confidence"]),
-            "data_quality": float(item["quality"]),
+            "data_quality": accepted_quality[analyst],
+            "reported_data_quality": reported_quality[analyst],
             "freshness": float(item["freshness"]),
             "base_weight": bases[analyst],
             "effective_weight": weight,
@@ -165,7 +186,7 @@ def score_official_shah(evidence, role_statuses=None):
         })
     scored_count = len(directions)
     all_verified = scored_count == len(ANALYSTS) and all(
-        role_statuses.get(name, "VERIFIED") == "VERIFIED" for name in ANALYSTS
+        statuses[name] == "VERIFIED" for name in ANALYSTS
     )
     return {
         "version": "shah-evidence-weigher-provenance-v1",
@@ -181,8 +202,7 @@ def score_official_shah(evidence, role_statuses=None):
             "scored_roles": scored_count,
             "total_roles": len(ANALYSTS),
             "fraction": scored_count / len(ANALYSTS),
-            "statuses": {name: role_statuses.get(name, "VERIFIED" if name in evidence else "UNAVAILABLE")
-                         for name in ANALYSTS},
+            "statuses": statuses,
         },
         "effective_weight_total": denominator,
         "contributions": rows,
