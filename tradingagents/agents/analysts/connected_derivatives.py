@@ -71,11 +71,9 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
                     raise ValueError("dated historical evidence lacks a valid nonfuture observation window")
             elif session_day > target_day:
                 raise ValueError("connected evidence postdates research session")
-            if (analyst == "oi" and ("schwab" in source or "options_chain" in dataset)
-                    and session_day != target_day):
-                raise ValueError("current Schwab chain snapshot cannot be reused for a historical session")
-            if analyst == "dealer" and dataset in ("net_gex", "net_vex") and session_day != target_day:
-                raise ValueError("current GEX/VEX snapshot cannot be reused for a historical session")
+            # Older nonfuture snapshots are allowed for a current report, with
+            # reduced freshness supplied to the scoring rubric. Future snapshots
+            # were rejected above; historical records use observation_end checks.
             if item.get("pagination_complete") is False:
                 raise ValueError("incomplete paginated evidence cannot be marked verified")
         from tradingagents.agents.analysts.dealer_positioning_analyst import (
