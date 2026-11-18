@@ -58,7 +58,7 @@ def _premium_persistence(rows):
             "first_value_usd": values[0],
             "last_value_usd": values[-1],
             "change_usd": values[-1] - values[0],
-            "directional_persistence_fraction": (
+            "dominant_change_sign_fraction": (
                 max(nonzero.count(1), nonzero.count(-1)) / len(nonzero)
                 if nonzero else None
             ),
@@ -400,7 +400,16 @@ def map_connector_data(
                 f"net_premium_series_rows={series['row_count']} "
                 f"window={series['from']}..{series['to']}"
             )
-            record.setdefault("features", {})["net_premium_persistence"] = _premium_persistence(series["rows"])
+            record.setdefault("features", {})["net_premium_persistence"] = {
+                **_premium_persistence(series["rows"]),
+                "request_parameters": series.get("request", {}),
+                "source_filters": {
+                    key: series.get("metadata", {}).get(key)
+                    for key in ("period", "include_multileg", "sweeps_only",
+                                "multilegs_filtered_count", "sweeps_filtered_count")
+                    if key in series.get("metadata", {})
+                },
+            }
             record["observation_end"] = end
         else:
             evidence.setdefault("flow", {
