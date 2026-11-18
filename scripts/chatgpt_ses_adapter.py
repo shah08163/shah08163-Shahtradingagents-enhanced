@@ -8,7 +8,13 @@ from math import isfinite
 
 from scripts.chatgpt_analyst_rubric import assess_numeric_input
 from scripts.validate_chatgpt_research import ANALYSTS, validate
-from tradingagents.ses import AnalystEvidence, SourceProvenance, TradeGate, decide_trade, score_evidence
+from tradingagents.ses import (
+    AnalystEvidence,
+    SourceProvenance,
+    TradeGate,
+    decide_trade,
+    score_evidence,
+)
 from tradingagents.shah_score import score_official_shah
 
 SES_SCORER_BLOB_SHA = "db393dd773f57eaeca3b4f3908b053b0ae3d4aa1"
