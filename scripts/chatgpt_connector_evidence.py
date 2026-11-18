@@ -60,6 +60,7 @@ def map_connector_data(
     schwab_bars=None,
     alpaca_bars=None,
     bullflow_flow_pages=None,
+    bullflow_oi_pages=None,
     bullflow_premium_series=None,
     bullflow_darkpool_pages=None,
     bullflow_gex_history=None,
@@ -140,7 +141,8 @@ def map_connector_data(
             "source_provenance": [_source(
                 f"bullflow:optionsProfile:{ticker or prof_data.get('symbol')}:{session}",
                 "Bullflow", "options_profile", prof_data["asOf"],
-                dependence_group=f"bullflow-profile:{ticker or prof_data.get('symbol')}:{session}",
+                share=0.25,
+                dependence_group=f"bullflow-flow-session:{ticker or prof_data.get('symbol')}:{session}",
             )],
             "evidence": [
                 "recorded_option_volume=" + str(activity.get("totalVolume")),
@@ -176,7 +178,7 @@ def map_connector_data(
             record["sources"].append(src)
             record["source_provenance"].append(_source(
                 src, "Bullflow", "historical_options_flow", page_summary["as_of"],
-                share=1.0, evidence_ids=event_ids,
+                share=0.50, evidence_ids=event_ids,
                 dependence_group=f"bullflow-flow-session:{ticker}:{trade_date}",
             ))
             record["evidence"].append(
@@ -215,6 +217,7 @@ def map_connector_data(
             record["sources"].append(src)
             record["source_provenance"].append(_source(
                 src, "Bullflow", "net_premium_series", series["as_of"],
+                share=0.25,
                 dependence_group=f"bullflow-premium-series:{ticker}:{start}:{end}",
             ))
             record["evidence"].append(
@@ -269,6 +272,7 @@ def map_connector_data(
                 "source_provenance": [_source(
                     f"schwab:options-chain:{ticker}:{chain['as_of']}",
                     "Schwab", "full_strike_options_chain", chain["as_of"],
+                    share=0.65,
                 )],
                 "evidence": [
                     f"contracts_returned={chain['contract_count']}",
@@ -283,6 +287,46 @@ def map_connector_data(
                 "status": "UNAVAILABLE", "as_of": None, "sources": [],
                 "evidence": [], "limitations": [str(exc)],
             }
+
+
+    if bullflow_oi_pages is not None:
+        if not (ticker and trade_date):
+            oi_pages, oi_error = None, "Ticker and exact trading date are required for OI flow-context validation"
+        else:
+            try:
+                oi_pages = validate_bullflow_pages(
+                    bullflow_oi_pages, ticker=ticker, date_value=trade_date,
+                )
+                oi_error = None
+            except (TypeError, ValueError, KeyError) as exc:
+                oi_pages, oi_error = None, str(exc)
+        record = evidence.setdefault("oi", {
+            "status": "PARTIAL", "as_of": None, "sources": [],
+            "source_provenance": [], "evidence": [], "limitations": [],
+        })
+        if oi_pages:
+            event_ids = [
+                row.get("event_id", row.get("eventId", row.get("trade_id", row.get("tradeId", row.get("id")))))
+                for row in oi_pages["rows"]
+            ]
+            src = f"bullflow:historicalOptionsFlow:oi-context:{ticker}:{trade_date}"
+            record["sources"].append(src)
+            record.setdefault("source_provenance", []).append(_source(
+                src, "Bullflow", "recorded_flow_oi_context", oi_pages["as_of"],
+                share=0.35, evidence_ids=event_ids,
+                dependence_group=f"bullflow-flow-session:{ticker}:{trade_date}",
+            ))
+            record.setdefault("evidence", []).append(
+                f"complete_oi_context_pages={oi_pages['page_count']}; "
+                f"unique_rows={oi_pages['row_count']}"
+            )
+            record.setdefault("limitations", []).append(
+                "Recorded trade OI context is not a full chain or proof of opening intent"
+            )
+        else:
+            record.setdefault("limitations", []).append(
+                "Bullflow OI-context validation failed: " + oi_error
+            )
 
     if bullflow_gex is not None:
         obj, data = _response_parts(bullflow_gex)
