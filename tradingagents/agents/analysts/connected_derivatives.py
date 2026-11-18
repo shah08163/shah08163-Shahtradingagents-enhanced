@@ -59,7 +59,6 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
             session_day = stamp.astimezone(ZoneInfo("America/New_York")).date()
             target_day = date.fromisoformat(trade_date)
             dataset = str(item.get("dataset", "")).lower()
-            source = str(item["source"]).lower()
             historical = dataset in (
                 "historical_options_flow", "recorded_flow_oi_context",
                 "dark_pool_trades", "net_premium_series", "dated_eod_gex_history",
