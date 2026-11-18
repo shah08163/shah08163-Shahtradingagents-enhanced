@@ -317,7 +317,7 @@ def map_connector_data(
                 "sources": [], "source_provenance": [], "evidence": [],
                 "limitations": [],
             })
-            oi_record["status"] = chain["status"]
+            oi_record["status"] = "PARTIAL"
             oi_record["as_of"] = chain["as_of"]
             oi_record["sources"].append(chain["source"])
             oi_record["source_provenance"].append(_source(
