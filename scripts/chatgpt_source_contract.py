@@ -81,13 +81,14 @@ def validate_bullflow_pages(
         data = response.get("data", response)
         if not isinstance(request, dict) or not isinstance(data, dict):
             raise ValueError("Malformed Bullflow page envelope")
-        if str(request.get("ticker", data.get("ticker", ticker))).upper() != ticker:
-            raise ValueError("Bullflow ticker mismatch")
-        if date_value is not None and request.get("date", date_value) != date_value:
-            raise ValueError("Bullflow page date mismatch")
+        if str(request.get("ticker", "")).upper() != ticker:
+            raise ValueError("Bullflow request ticker missing or mismatched")
+        if date_value is not None:
+            if request.get("date") != date_value:
+                raise ValueError("Bullflow page date missing or mismatched")
         if start is not None:
-            if request.get("from", start) != start or request.get("to", end) != end:
-                raise ValueError("Bullflow page range mismatch")
+            if request.get("from") != start or request.get("to") != end:
+                raise ValueError("Bullflow page range missing or mismatched")
         if request.get("cursor") != expected_cursor:
             raise ValueError("Bullflow pagination cursor discontinuity")
         if terminal:
@@ -107,14 +108,22 @@ def validate_bullflow_pages(
             row_date = next((row.get(k) for k in (
                 "tradeDate", "trade_date", "date", "sessionDate"
             ) if row.get(k) is not None), None)
+            if row_date is None:
+                timestamp = next((row.get(k) for k in (
+                    "timestamp", "tradeTimestamp", "trade_timestamp", "trfTimestampMs"
+                ) if row.get(k) is not None), None)
+                if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool):
+                    stamp_seconds = timestamp / 1000 if timestamp > 100000000000 else timestamp
+                    row_date = datetime.fromtimestamp(stamp_seconds, tz=ZoneInfo("UTC")).isoformat()
+                elif isinstance(timestamp, str):
+                    row_date = timestamp
             parsed = _as_date(row_date) if row_date is not None else None
-            if row_date is not None and parsed is None:
-                raise ValueError("Bullflow row has an invalid date")
-            if parsed is not None:
-                if date_value is not None and parsed != date.fromisoformat(date_value):
-                    raise ValueError("Bullflow row falls outside requested session")
-                if start is not None and not date.fromisoformat(start) <= parsed <= date.fromisoformat(end):
-                    raise ValueError("Bullflow row falls outside requested range")
+            if parsed is None:
+                raise ValueError("Bullflow row lacks a valid dated trade timestamp")
+            if date_value is not None and parsed != date.fromisoformat(date_value):
+                raise ValueError("Bullflow row falls outside requested session")
+            if start is not None and not date.fromisoformat(start) <= parsed <= date.fromisoformat(end):
+                raise ValueError("Bullflow row falls outside requested range")
             ident = next((row.get(k) for k in (
                 "event_id", "eventId", "trade_id", "tradeId", "id", "uuid"
             ) if row.get(k) not in (None, "")), None)
@@ -384,10 +393,10 @@ def validate_range_response(raw, *, ticker, start, end, data_keys=()):
     data = response.get("data", response)
     if not isinstance(data, dict) or not isinstance(request, dict):
         raise ValueError("Malformed dated-series envelope")
-    if str(request.get("ticker", data.get("ticker", ticker))).upper() != ticker.upper():
-        raise ValueError("Dated-series ticker mismatch")
-    if request.get("from", start) != start or request.get("to", end) != end:
-        raise ValueError("Dated-series request window mismatch")
+    if str(request.get("ticker", "")).upper() != ticker.upper():
+        raise ValueError("Dated-series request ticker missing or mismatched")
+    if request.get("from") != start or request.get("to") != end:
+        raise ValueError("Dated-series request window missing or mismatched")
     if data.get("ticker") and str(data["ticker"]).upper() != ticker.upper():
         raise ValueError("Dated-series payload ticker mismatch")
     observed_start = data.get("from", start)
@@ -400,12 +409,34 @@ def validate_range_response(raw, *, ticker, start, end, data_keys=()):
         series = next((value for value in data.values() if isinstance(value, list)), None)
     if not isinstance(series, list) or not series:
         raise ValueError("Dated series is empty or missing")
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    seen_points = set()
+    ordered = []
+    for point in series:
+        if not isinstance(point, dict):
+            raise ValueError("Dated-series point is not an object")
+        stamp = point.get("timestamp", point.get("date", point.get("tradingDate")))
+        if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+            stamp_seconds = stamp / 1000 if stamp > 100000000000 else stamp
+            dt = datetime.fromtimestamp(stamp_seconds, tz=ZoneInfo("UTC"))
+            observed_day = dt.astimezone(ET).date()
+        else:
+            observed_day = _as_date(stamp)
+            dt = datetime.combine(observed_day, datetime.min.time(), tzinfo=ET) if observed_day else None
+        if observed_day is None or not first <= observed_day <= last:
+            raise ValueError("Dated-series point is missing a valid in-window timestamp")
+        identity = dt.isoformat()
+        if identity in seen_points:
+            raise ValueError("Dated-series contains duplicate timestamps")
+        seen_points.add(identity)
+        ordered.append((dt, point))
+    ordered.sort(key=lambda pair: pair[0])
     return {
         "status": "VERIFIED",
         "ticker": ticker.upper(),
         "from": start,
         "to": end,
-        "row_count": len(series),
+        "row_count": len(ordered),
         "as_of": data.get("asOf", data.get("as_of")),
-        "rows": series,
+        "rows": [point for _, point in ordered],
     }
