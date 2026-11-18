@@ -152,6 +152,26 @@ def map_connector_data(
                 "Recorded-feed aggregates do not alone establish opening intent or directional trade intent"
             ],
         }
+        unusual = prof_data.get("unusualContracts")
+        if unusual:
+            oi_record = evidence.setdefault("oi", {
+                "status": "PARTIAL", "as_of": prof_data["asOf"],
+                "sources": [], "source_provenance": [], "evidence": [],
+                "limitations": [],
+            })
+            oi_src = f"bullflow:optionsProfile:oi-context:{ticker or prof_data.get('symbol')}:{session}"
+            oi_record["sources"].append(oi_src)
+            oi_record["source_provenance"].append(_source(
+                oi_src, "Bullflow", "options_profile_oi_context", prof_data["asOf"],
+                share=0.35,
+                dependence_group=f"bullflow-oi-context:{ticker or prof_data.get('symbol')}:{session}",
+            ))
+            oi_record["evidence"].append(
+                "unusual_contract_oi_context_count=" + str(len(unusual))
+            )
+            oi_record["limitations"].append(
+                "Bullflow profile OI ratios are a recorded-contract sample, not full-chain OI"
+            )
 
     if bullflow_flow_pages is not None:
         if not (ticker and trade_date):
