@@ -1,0 +1,87 @@
+{
+  "market": {
+    "status": "VERIFIED",
+    "as_of": "2026-10-29T01:55:47Z",
+    "sources": [
+      "Schwab Cloudflare Web quote GOOGL",
+      "Alpaca IEX daily bars"
+    ],
+    "evidence": [
+      "Schwab regular-session last 324.89; after-hours last 292.61; timestamped source snapshots differ",
+      "Alpaca IEX daily bar close 325.37 (limited-market feed)"
+    ],
+    "limitations": [
+      "Not all feeds represent same session or trading venue"
+    ]
+  },
+  "social": {
+    "status": "UNAVAILABLE",
+    "as_of": null,
+    "sources": [],
+    "evidence": [],
+    "limitations": [
+      "No independently verified social source"
+    ]
+  },
+  "news": {
+    "status": "UNAVAILABLE",
+    "as_of": null,
+    "sources": [],
+    "evidence": [],
+    "limitations": [
+      "News primary-source verification not included in this connector smoke fixture"
+    ]
+  },
+  "fundamentals": {
+    "status": "PARTIAL",
+    "as_of": "2026-10-29T01:55:47Z",
+    "sources": [
+      "Schwab Cloudflare Web quote fundamentals"
+    ],
+    "evidence": [
+      "Schwab returned EPS and PE fields"
+    ],
+    "limitations": [
+      "These quote fields do not replace dated filings"
+    ]
+  },
+  "flow": {
+    "status": "VERIFIED",
+    "as_of": "2026-10-29T01:07:04Z",
+    "sources": [
+      "Bullflow optionsProfile /v1/data/optionsProfile"
+    ],
+    "evidence": [
+      "2026-10-28 recorded options volume 278532; net directional premium USD 4151862"
+    ],
+    "limitations": [
+      "Recorded flow only; not market-wide and directional metric excludes MULTI"
+    ]
+  },
+  "oi": {
+    "status": "PARTIAL",
+    "as_of": "2026-10-29T01:55:56Z",
+    "sources": [
+      "Schwab Cloudflare Web 0-60 DTE explorer"
+    ],
+    "evidence": [
+      "Option contracts, open interest and IV returned"
+    ],
+    "limitations": [
+      "Certain quotes aged and Greeks missing; no all-contract quality certification"
+    ]
+  },
+  "dealer": {
+    "status": "PARTIAL",
+    "as_of": "2026-10-29T01:55:56Z",
+    "sources": [
+      "Bullflow netgex /v1/data/netgex"
+    ],
+    "evidence": [
+      "GEX by strike and expiration returned with spot_price 292.5"
+    ],
+    "limitations": [
+      "GEX model does not prove dealer inventory direction"
+    ]
+  }
+}

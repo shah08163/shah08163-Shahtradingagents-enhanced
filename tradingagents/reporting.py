@@ -51,6 +51,9 @@ _SECTIONS = (
     ("I. Analyst Team Reports", "1_analysts", (
         ("Market Analyst", "market.md", ("market_report",)),
         ("Sentiment Analyst", "sentiment.md", ("sentiment_report",)),
+        ("Flow Analyst", "flow.md", ("flow_report",)),
+        ("OI Analyst", "oi.md", ("oi_report",)),
+        ("Dealer Analyst", "dealer.md", ("dealer_report",)),
         ("News Analyst", "news.md", ("news_report",)),
         ("Fundamentals Analyst", "fundamentals.md", ("fundamentals_report",)),
     )),
