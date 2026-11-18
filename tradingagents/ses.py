@@ -207,6 +207,9 @@ def score_evidence(
                 if not all(isinstance(x, str) and x.strip()
                            for x in (source.source_id, source.provider, source.dataset)):
                     raise ValueError("Source provenance requires source_id, provider, and dataset")
+                if (isinstance(source.weight_share, bool)
+                        or not isinstance(source.weight_share, (int, float))):
+                    raise ValueError("Source provenance weight_share must be numeric")
                 _unit_interval("source weight_share", source.weight_share)
                 shares += source.weight_share
                 if any(not isinstance(event_id, str) or not event_id.strip()
