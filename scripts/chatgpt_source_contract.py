@@ -175,19 +175,21 @@ def validate_bullflow_pages(
     }
 
 
-def validate_market_bars(bars, *, ticker, source_id, start, end, source_as_of=None):
+def validate_market_bars(bars, *, ticker, source_id, start, end, source_as_of=None,
+                         as_of_date=None):
     """Validate normalized completed daily bars; caller preserves raw source response."""
     if not isinstance(bars, list) or not bars or not source_id:
         raise ValueError("Market bars and source provenance are required")
     first, last = date.fromisoformat(start), date.fromisoformat(end)
+    ceiling = date.fromisoformat(as_of_date) if as_of_date else last
     normalized, seen = [], set()
     for bar in bars:
         if not isinstance(bar, dict) or bar.get("completed") is not True:
             raise ValueError("Only completed bars may enter daily market analysis")
         day = _as_date(bar.get("date"))
         close = bar.get("close")
-        if day is None or not first <= day <= last:
-            raise ValueError("Bar date is missing or outside the requested range")
+        if day is None or not first <= day <= last or day > ceiling:
+            raise ValueError("Bar date is missing or outside the requested/as-of range")
         if (isinstance(close, bool) or not isinstance(close, (float, int))
                 or not isfinite(close) or close <= 0):
             raise ValueError("Bar close must be finite and positive")
@@ -215,12 +217,14 @@ def select_market_bars(
     alpaca_source="Alpaca IEX",
     schwab_as_of=None,
     alpaca_as_of=None,
+    as_of_date=None,
 ):
     """Schwab is primary; use Alpaca only when Schwab data fails validation."""
     try:
         chosen = validate_market_bars(
             schwab_bars, ticker=ticker, source_id=schwab_source,
             start=start, end=end, source_as_of=schwab_as_of,
+            as_of_date=as_of_date,
         )
         chosen["fallback_used"] = False
         return chosen
@@ -229,6 +233,7 @@ def select_market_bars(
             chosen = validate_market_bars(
                 alpaca_bars, ticker=ticker, source_id=alpaca_source,
                 start=start, end=end, source_as_of=alpaca_as_of,
+                as_of_date=as_of_date,
             )
             chosen["fallback_used"] = True
             chosen["fallback_reason"] = str(schwab_error)
