@@ -101,16 +101,15 @@ def assemble(ticker, repository_sha, evidence, run_at=None):
     for analyst in ANALYSTS:
         if analyst not in score_claims:
             score_rejections.setdefault(analyst, ["no valid structured score_input"])
-    if score_claims:
-        try:
-            shah_score_details = score_official_shah(
-                score_claims,
-                {name: records[name]["status"] for name in ANALYSTS},
-            )
-            official_score = shah_score_details["value"]
-            scoring_spec_sha = shah_score_details["spec_sha"]
-        except (TypeError, ValueError) as exc:
-            score_rejections["official_shah_score"] = [str(exc)]
+    try:
+        shah_score_details = score_official_shah(
+            score_claims,
+            {name: records[name]["status"] for name in ANALYSTS},
+        )
+        official_score = shah_score_details["value"]
+        scoring_spec_sha = shah_score_details["spec_sha"]
+    except (TypeError, ValueError) as exc:
+        score_rejections["official_shah_score"] = [str(exc)]
     report = {"ticker": ticker.upper().strip(),
         "run_at": run_at or datetime.now(UTC).isoformat(),
         "repository_sha": repository_sha, "analysts": records,
