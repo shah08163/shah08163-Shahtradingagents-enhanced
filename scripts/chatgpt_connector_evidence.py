@@ -47,6 +47,23 @@ def _bars(payload):
     return data if isinstance(data, list) else None
 
 
+def _source_as_of(payload):
+    if payload is None:
+        return None
+    obj, data = _response_parts(payload)
+    for key in ("as_of", "asOf", "retrieved_at_utc", "retrieval_timestamp", "source_timestamp"):
+        value = obj.get(key) if isinstance(obj, dict) else None
+        if value:
+            return value
+        value = data.get(key) if isinstance(data, dict) else None
+        if value:
+            return value
+    bars = data.get("bars", data.get("candles", [])) if isinstance(data, dict) else []
+    if isinstance(bars, list) and bars:
+        return bars[-1].get("provider_timestamp")
+    return None
+
+
 def map_connector_data(
     schwab_quote=None,
     bullflow_profile=None,
@@ -81,19 +98,22 @@ def map_connector_data(
                 selected = select_market_bars(
                     _bars(schwab_bars), _bars(alpaca_bars),
                     ticker=ticker, start=start, end=end,
+                    schwab_as_of=_source_as_of(schwab_bars),
+                    alpaca_as_of=_source_as_of(alpaca_bars),
                 )
                 evidence["market"] = {
                     "status": "PARTIAL",
-                    "as_of": selected["end"],
+                    "as_of": selected["as_of"],
                     "sources": [selected["source_id"]],
                     "source_provenance": [_source(
                         selected["source_id"], selected["source_id"], "equity_daily_bars",
-                        selected["end"], share=1.0,
+                        selected["as_of"], share=1.0,
                     )],
                     "evidence": [
                         f"completed_daily_bars={selected['bar_count']}",
                         f"validated_window={selected['start']}..{selected['end']}",
                     ],
+                    "observation_end": selected["end"],
                     "limitations": (
                         ["Schwab failed validation; Alpaca IEX fallback used: "
                          + selected.get("fallback_reason", "Schwab data unavailable")]
