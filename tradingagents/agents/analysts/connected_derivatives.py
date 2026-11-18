@@ -57,14 +57,24 @@ def create_connected_derivatives_analyst(llm, analyst, evidence_loader):
             if stamp.tzinfo is None:
                 raise ValueError("connected evidence timezone required")
             session_day = stamp.astimezone(ZoneInfo("America/New_York")).date()
-            if session_day > date.fromisoformat(trade_date):
-                raise ValueError("connected evidence postdates research session")
+            target_day = date.fromisoformat(trade_date)
             dataset = str(item.get("dataset", "")).lower()
             source = str(item["source"]).lower()
+            historical = dataset in (
+                "historical_options_flow", "recorded_flow_oi_context",
+                "dark_pool_trades", "net_premium_series", "dated_eod_gex_history",
+            )
+            observation_end = item.get("observation_end") or item.get("observation_date")
+            if historical:
+                observed_day = date.fromisoformat(observation_end) if observation_end else None
+                if observed_day is None or observed_day > target_day:
+                    raise ValueError("dated historical evidence lacks a valid nonfuture observation window")
+            elif session_day > target_day:
+                raise ValueError("connected evidence postdates research session")
             if (analyst == "oi" and ("schwab" in source or "options_chain" in dataset)
-                    and session_day != date.fromisoformat(trade_date)):
+                    and session_day != target_day):
                 raise ValueError("current Schwab chain snapshot cannot be reused for a historical session")
-            if analyst == "dealer" and dataset in ("net_gex", "net_vex") and session_day != date.fromisoformat(trade_date):
+            if analyst == "dealer" and dataset in ("net_gex", "net_vex") and session_day != target_day:
                 raise ValueError("current GEX/VEX snapshot cannot be reused for a historical session")
             if item.get("pagination_complete") is False:
                 raise ValueError("incomplete paginated evidence cannot be marked verified")
