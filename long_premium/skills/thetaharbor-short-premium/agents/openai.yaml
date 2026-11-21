@@ -1,0 +1,5 @@
+interface:
+  display_name: "ThetaHarbor Short Premium"
+  short_description: "Research defined-risk short-premium setups"
+  default_prompt: "Use $thetaharbor-short-premium to run the locked VER 1.0 short-premium scan."
+

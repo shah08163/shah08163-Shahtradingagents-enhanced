@@ -1,0 +1,50 @@
+name: Long Premium Universe Screen (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_test:
+        description: "Test first 30 symbols only (not certified)"
+        type: boolean
+        required: true
+        default: true
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check required credentials
+        env:
+          KEY: ${{ secrets.ALPACA_API_KEY_ID }}
+          SECRET: ${{ secrets.ALPACA_API_SECRET_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$SECRET" ]; then
+            echo "::error::Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY as repository Actions secrets"; exit 1
+          fi
+      - name: Unit tests
+        run: python -m unittest discover -s long_premium/tests -v
+      - name: Screen eligible optionable stocks
+        env:
+          APCA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          SMOKE: ${{ inputs.smoke_test }}
+        run: |
+          if [ "$SMOKE" = "true" ]; then
+            python long_premium/universe_screen.py --limit 30 --out artifacts
+          else
+            python long_premium/universe_screen.py --out artifacts
+          fi
+      - name: Upload audit and screener output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-premium-universe-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30

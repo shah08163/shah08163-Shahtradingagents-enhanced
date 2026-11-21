@@ -1,0 +1,5 @@
+interface:
+  display_name: "VoltaForge Long Premium"
+  short_description: "Research long calls, puts, and debit spreads"
+  default_prompt: "Use $voltaforge-long-premium to run the locked VER 1.0 long-premium scan."
+
